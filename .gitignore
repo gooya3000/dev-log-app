@@ -37,9 +37,11 @@ out/
 .vscode/
 
 ### DevLog ###
-# JSON 회고 데이터 — 로컬 전용, 리포에 올리지 않음
-data/
 # 시크릿/로컬 설정 — 절대 커밋 금지 (PLAN.md §5)
 .env
 .env.local
 **/application-local.properties
+# Claude Code 로컬 권한 설정 — 머신별로 다름
+.claude/settings.local.json
+# 주의: data/ 는 더 이상 ignore 하지 않는다.
+# 회고는 AES-256-GCM ciphertext로 저장되므로 공개 리포에 안전하게 커밋된다 (PLAN.md §4.5).

@@ -16,9 +16,11 @@
 ## 절대 지킬 것 (보안)
 
 - `application.properties` / `application.yml`에 **API 키·토큰·시크릿을 두지 않는다.** 환경변수 placeholder(`${ANTHROPIC_API_KEY:}`)조차 두지 않는다. (PLAN.md §5)
-- LLM API 키는 **매 요청 시 폼으로만** 받고, 빈/필드/세션/캐시/로그/예외 메시지에 남기지 않는다.
+- **두 종류의 키 모두 stateless로 처리**: LLM API 키(§5.1)와 vault passphrase(§5.6). 폼으로만 받고, 빈/필드/세션/캐시/로그/예외 메시지에 남기지 않는다.
 - 키를 담는 DTO 필드는 `@ToString.Exclude` 필수.
-- `data/`, `.env`, `application-local.properties`는 `.gitignore`.
+- **회고 평문이 디스크에 떨어지면 안 된다.** 모든 저장은 `VaultCipher`를 통과해 AES-256-GCM ciphertext로만 기록 (§4.5). 평문은 메모리에만.
+- `.env`, `application-local.properties`, `.claude/settings.local.json`는 `.gitignore`.
+- **주의**: `data/`는 ignore 대상이 아니다. ciphertext 형태로 리포에 커밋된다.
 
 ## 기술 스택
 
