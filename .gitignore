@@ -35,3 +35,11 @@ out/
 
 ### VS Code ###
 .vscode/
+
+### DevLog ###
+# JSON 회고 데이터 — 로컬 전용, 리포에 올리지 않음
+data/
+# 시크릿/로컬 설정 — 절대 커밋 금지 (PLAN.md §5)
+.env
+.env.local
+**/application-local.properties
