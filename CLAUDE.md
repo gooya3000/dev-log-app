@@ -15,10 +15,13 @@
 
 ## 절대 지킬 것 (보안)
 
-- `application.properties` / `application.yml`에 **API 키·토큰·시크릿을 두지 않는다.** 환경변수 placeholder(`${ANTHROPIC_API_KEY:}`)조차 두지 않는다. (PLAN.md §5)
-- **두 종류의 키 모두 stateless로 처리**: LLM API 키(§5.1)와 vault passphrase(§5.6). 폼으로만 받고, 빈/필드/세션/캐시/로그/예외 메시지에 남기지 않는다.
-- 키를 담는 DTO 필드는 `@ToString.Exclude` 필수.
-- **회고 평문이 디스크에 떨어지면 안 된다.** 모든 저장은 `VaultCipher`를 통과해 AES-256-GCM ciphertext로만 기록 (§4.5). 평문은 메모리에만.
+- `application.properties` (committed) 에 **시크릿 절대 금지** — API 키·user passphrase·admin passphrase 모두. 환경변수 placeholder(`${ANTHROPIC_API_KEY:}`)도 안 씀.
+- **Admin passphrase 만 예외적으로 평문 보관** — `application-local.properties` (gitignored)에 하드코딩. 그 외 모든 시크릿은 stateless 폼 처리 (§5.6, §5.7).
+- 시크릿을 담는 DTO 필드(`apiKey`, `passphrase`)는 `@ToString.Exclude` 필수. `AdminProperties` 빈도 동일.
+- **회고 평문이 디스크에 떨어지면 안 된다.** 모든 저장은 `VaultCipher` 통과 → AES-256-GCM ciphertext 만 기록. 평문은 메모리에만.
+- **DEK 래핑 구조 유지**: 파일은 DEK 로 암호화, DEK 는 admin 키 / 각 user 키로 별도 wrap. DEK 가 평문 디스크에 노출되는 경로를 만들지 말 것.
+- **권한 분리 유지**: Spring Security 로 `/vault/**` = ROLE_ADMIN, `/logs/**` = ROLE_USER. 한 컨트롤러가 두 권한 다 다루지 말 것.
+- `.env`, `application-local.properties`, `.claude/settings.local.json` 는 `.gitignore`. **주의**: `data/` 는 ignore 대상 아님 — ciphertext 형태로 리포에 커밋된다.
 - `.env`, `application-local.properties`, `.claude/settings.local.json`는 `.gitignore`.
 - **주의**: `data/`는 ignore 대상이 아니다. ciphertext 형태로 리포에 커밋된다.
 

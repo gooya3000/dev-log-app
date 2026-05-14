@@ -1,0 +1,16 @@
+# 로컬 전용 설정 템플릿.
+#
+# 사용법:
+#   1) 이 파일을 application-local.properties 로 복사
+#        cp application-local.properties.example application-local.properties
+#   2) 아래 값을 본인의 실제 값으로 교체
+#   3) application-local.properties 는 .gitignore 되어 있으므로 절대 커밋되지 않음
+#
+# 자세한 정책은 docs/PLAN.md §5.7 (Admin passphrase 처리) 참조.
+
+# 관리자 passphrase. /vault/** 영역(관리자 도구) 진입에 사용.
+# 평문 하드코딩이며, 절대 GitHub 에 올라가지 않도록 주의.
+# 분실 시 application-local.properties 를 새 값으로 갱신만 하면 됨 — 단,
+# 새 값으로 .vault-meta.json 의 adminWrappedDek 도 재발급해야 unwrap 가능.
+# (자세한 흐름은 PLAN.md §4.5.6)
+devlog.admin.passphrase=CHANGE-ME-TO-A-STRONG-ADMIN-PASSPHRASE
