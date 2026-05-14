@@ -1,0 +1,70 @@
+# DevLog
+
+개인용 개발 회고 앱. Spring Boot + Thymeleaf, DB 없이 JSON 파일 1개 = 회고 1건. 회고를 LLM에 보내 기술 블로그 마크다운 초안을 생성한다.
+
+이 리포는 **GitHub에 공개로 푸시**된다. 어떤 시크릿도 리포에 들어가지 않는다.
+
+---
+
+## 설계 참조: `docs/PLAN.md`
+
+모든 설계 결정은 `docs/PLAN.md`를 1차 출처로 삼는다. 기능 범위, 화면, 패키지 구조, JSON 저장 정책, 키 정책, 서브에이전트 분리 계획이 모두 거기 있다.
+
+- 코드를 짜기 전, 변경이 PLAN.md의 어느 절(§)에 해당하는지 먼저 확인한다.
+- PLAN.md와 실제 코드가 충돌하면, **결정을 다시 묻고 PLAN.md를 갱신한 뒤** 코드를 바꾼다. 침묵 드리프트 금지.
+
+## 절대 지킬 것 (보안)
+
+- `application.properties` / `application.yml`에 **API 키·토큰·시크릿을 두지 않는다.** 환경변수 placeholder(`${ANTHROPIC_API_KEY:}`)조차 두지 않는다. (PLAN.md §5)
+- LLM API 키는 **매 요청 시 폼으로만** 받고, 빈/필드/세션/캐시/로그/예외 메시지에 남기지 않는다.
+- 키를 담는 DTO 필드는 `@ToString.Exclude` 필수.
+- `data/`, `.env`, `application-local.properties`는 `.gitignore`.
+
+## 기술 스택
+
+- Java 17, Spring Boot 3.x, Gradle
+- Thymeleaf, Jackson, `spring-boot-starter-validation`, Lombok
+- 테스트: JUnit 5 (+ MockMvc, WireMock as needed)
+- 저장: 로컬 JSON 파일 (`./data/logs/{date}_{id}.json`)
+
+## 자주 쓰는 명령
+
+- 실행: `./gradlew bootRun`
+- 테스트: `./gradlew test`
+- 빌드: `./gradlew build`
+
+## 코드 관습
+
+- 기본 패키지: `com.example.devlogapp` (서브 구조는 PLAN.md §3)
+- 도메인 모델은 가능한 한 불변. `@Data` 남발하지 말고, 수정 필요한 곳에만 setter.
+- Jackson 시간 직렬화: ISO-8601 (`WRITE_DATES_AS_TIMESTAMPS=false`), pretty-print on.
+- JSON 파일 쓰기는 **atomic**: tmp 파일에 쓴 뒤 `Files.move(..., ATOMIC_MOVE)`.
+- 파일명 규칙: `{yyyy-MM-dd}_{id}.json`. `id`는 ULID 또는 UUIDv7.
+- `schemaVersion` 필드를 첫날부터 둔다.
+- 컨트롤러는 폼 검증(`@Valid`)을 거치고, 도메인 변환은 서비스에서. 컨트롤러에 비즈니스 로직 금지.
+
+## 테스트 정책
+
+- 저장소(`JsonDevLogRepository`)는 임시 디렉토리 기반 round-trip 테스트가 기본.
+- AI 어댑터는 WireMock/fake로 외부 호출 없이 테스트. **실제 키로 테스트 돌리지 말 것.**
+- 컨트롤러는 MockMvc 슬라이스로 200/302/유효성 에러 흐름 확인.
+
+## 서브에이전트 작업 시
+
+이 리포는 `.claude/agents/`에 **커스텀 에이전트 4개**를 정의해 두었다. Phase별 매핑은 PLAN.md §6.4 표 참조.
+
+- `spring-backend` (sonnet, 풀권한) — Phase 1, 2-A
+- `ai-integration` (sonnet, 풀권한) — Phase 2-B. 시스템 프롬프트에 §5 키 정책이 박혀 있음
+- `test-engineer` (haiku, 프로덕션 코드 수정 금지 규칙) — Phase 2-C, 테스트 보강
+- `code-reviewer` (opus, **읽기 전용**) — Phase 머지 직전 리뷰. Edit/Write 도구 없음
+
+위임 시 규칙:
+- 브리핑에 **PLAN.md의 어느 절/Phase인지** 항상 명시.
+- "이해를 위임하지 않는다." 구체적인 파일/시그니처/통과시켜야 할 테스트로 좁혀서 위임.
+- Phase 1(도메인+저장소)이 후속 작업의 계약이라 단독으로 먼저 끝낸다. Phase 2-A/2-B/2-C는 병렬.
+- 서브에이전트의 "완료했습니다"는 의도일 뿐. 메인 세션이 diff·테스트로 직접 확인. 머지 직전엔 `code-reviewer` 한 번 더 돌릴 것.
+
+## 커뮤니케이션
+
+- 응답은 한국어로, 짧게. 결정과 결과 위주.
+- 코드 변경 후 길게 요약하지 말 것 — diff가 이미 보임.

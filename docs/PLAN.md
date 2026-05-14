@@ -236,15 +236,16 @@ data/
 
 ### 6.2 단계별 서브에이전트 위임 표
 
-| Phase | 서브에이전트 역할 | 인풋 (브리핑에 포함할 것) | 아웃풋 / Done 기준 |
+| Phase | 사용 에이전트 | 인풋 (브리핑에 포함할 것) | 아웃풋 / Done 기준 |
 |---|---|---|---|
-| 0 | **빌드 정비** | 현 `build.gradle`, 추가할 의존성(`spring-boot-starter-validation`), JSON 저장 경로 | `build.gradle` 수정, `application.properties`에 `devlog.storage.root` 추가, `.gitignore`에 `data/` 추가 |
-| 1 | **도메인+저장소 구현** | 본 문서 §1.2, §3, §4 전체 | `DevLog`, `DevLogRepository`, `JsonDevLogRepository`. `JsonDevLogRepositoryTest`에서 save → findAll → findById → update → delete round-trip 통과 |
-| 2-A | **웹 레이어 구현** | 본 문서 §2, 그리고 §3의 web 패키지 구조 | 5개 Thymeleaf 템플릿 + 컨트롤러 + 폼 검증. `MockMvc` 슬라이스 테스트로 200/302 확인 |
-| 2-B | **AI 어댑터 구현** | §3의 ai 패키지 + §5 키 정책 (필드/빈 저장 금지, 인자 전달만) + "DevLog 1건 → 블로그용 마크다운" 변환 사양 | `AiClient` 인터페이스(`generate(prompt, apiKey)`), Claude **또는** OpenAI 어댑터 1개, `BlogPromptBuilder`. 어댑터 단위 테스트는 WireMock 또는 fake. **키가 로그/예외에 노출되지 않는지 확인하는 테스트 포함** |
-| 2-C | **저장소 보강 테스트** | atomic write·동시 read·UTF-8·`schemaVersion` 누락 케이스 | 추가 단위 테스트들 |
-| 3 | **블로그 변환 화면 통합** | Phase 2-A, 2-B 산출물 | `BlogDraftController` + `blog-draft.html`, "복사" 버튼, 통합 테스트 1개 |
-| 4 | **E2E 점검** | (사람이 직접) `./gradlew bootRun` 후 브라우저로 검증 | 수동 체크리스트 통과 |
+| 0 | (메인 세션 직접) | 현 `build.gradle`, 추가할 의존성(`spring-boot-starter-validation`), JSON 저장 경로 | `build.gradle` 수정, `application.properties`에 `devlog.storage.root` 추가, `.gitignore`에 `data/` 추가 |
+| 1 | `spring-backend` | 본 문서 §1.2, §3, §4 전체 | `DevLog`, `DevLogRepository`, `JsonDevLogRepository`. `JsonDevLogRepositoryTest`에서 save → findAll → findById → update → delete round-trip 통과 |
+| 2-A | `spring-backend` | 본 문서 §2, 그리고 §3의 web 패키지 구조 | 5개 Thymeleaf 템플릿 + 컨트롤러 + 폼 검증. `MockMvc` 슬라이스 테스트로 200/302 확인 |
+| 2-B | `ai-integration` | §3의 ai 패키지 + §5 키 정책 + "DevLog 1건 → 블로그용 마크다운" 변환 사양 + (메인이 지정한) Claude/OpenAI 중 어느 쪽인지 | `AiClient` 인터페이스(`generate(prompt, apiKey)`), 어댑터 1개, `BlogPromptBuilder`. WireMock 테스트 + **키 노출 검증 테스트 필수** |
+| 2-C | `test-engineer` | atomic write·동시 read·UTF-8·`schemaVersion` 누락 케이스 | 저장소 보강 단위 테스트들 |
+| 3 (코드) | (메인 세션) | Phase 2-A, 2-B 산출물 | `BlogDraftController` + `blog-draft.html`, "복사" 버튼, 통합 테스트 1개 |
+| 3 (리뷰) | `code-reviewer` | Phase 1~3 변경 diff 전체 | 체크리스트 기반 PASS/FAIL 리포트 |
+| 4 | (사람이 직접) | `./gradlew bootRun` 후 브라우저로 검증 | 수동 체크리스트 통과 |
 
 ### 6.3 서브에이전트에 브리핑할 때 지킬 규칙
 
@@ -260,9 +261,19 @@ data/
 
 ### 6.4 어떤 에이전트 타입을 쓸까
 
+이 리포는 **프로젝트 레벨 커스텀 에이전트 4개를 정의**했다 (`.claude/agents/`). 각자 모델·권한·책임이 다르게 설계되어 있다.
+
+| 에이전트 | 모델 | 권한 | 어디에 쓰나 |
+|---|---|---|---|
+| `spring-backend` | sonnet | 풀권한 | Phase 1 (도메인+저장소), Phase 2-A (웹 CRUD) |
+| `ai-integration` | sonnet | 풀권한 | Phase 2-B (AI 어댑터) — §5 키 정책을 시스템 프롬프트에 박아둠 |
+| `test-engineer` | haiku | 풀권한 (단, 프로덕션 코드 수정 금지를 본문 규칙으로) | Phase 2-C, 그리고 다른 Phase의 테스트 보강 |
+| `code-reviewer` | opus | **읽기 전용** (Edit/Write 없음) | 각 Phase 머지 직전, Phase 3 통합 전 |
+
+빌트인 에이전트는 보조 용도로:
 - 코드 탐색·"어디 정의돼 있나?" 류 → `Explore`
 - 설계 결정·트레이드오프 정리 → `Plan`
-- 실제 구현·테스트 작성 → `general-purpose`
+- 그 외 범용 한 번짜리 → `general-purpose`
 - 보안/취약점 점검 (후반) → `/security-review` 스킬
 
 ---
