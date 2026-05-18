@@ -118,6 +118,9 @@ com.example.devlogapp
 │
 ├── security                     // Spring Security 통합 (§5.7)
 │   ├── SecurityConfig           // SecurityFilterChain — /vault/** = ADMIN, /logs/** = USER
+│   │                            //   Phase 1: 단일 FilterChain + admin formLogin 만 구성 (임시)
+│   │                            //   Phase 2-A TODO: ① admin/user 두 FilterChain 분리,
+│   │                            //                   ② /unlock CSRF ignoring 제거 (Thymeleaf _csrf 토큰)
 │   ├── AdminAuthenticationProvider  // admin passphrase 검증 + adminWrappedDek sanity unwrap
 │   ├── UserAuthenticationProvider   // user passphrase 검증 + DEK unwrap → Vault 적재
 │   └── CurrentSession           // 현재 세션의 권한·userId 컨텍스트 헬퍼
