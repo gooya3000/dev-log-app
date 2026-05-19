@@ -15,12 +15,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * ⑩ JsonDevLogRepository 표준 CRUD 라운드트립
@@ -159,5 +162,97 @@ class JsonDevLogRepositoryTest {
     @Test
     void findById_notFound_returnsEmpty() {
         assertThat(repository.findById(new DevLogId("nonexistent-id"))).isEmpty();
+    }
+
+    @Test
+    void save_utf8_koreanAndEmoji_roundtrip() {
+        // UTF-8 본문(한글 + 이모지)이 ciphertext 라운드트립 후에도 정확히 복원되는지
+        String body = "오늘은 🚀 새 기능을 배포했다. 이슈는 없었음 😅";
+        OffsetDateTime now = OffsetDateTime.now();
+        DevLog log = DevLog.builder()
+                .id("utf8-id")
+                .date("2026-05-18")
+                .title("UTF-8 라운드트립 🇰🇷")
+                .tags(List.of("한글-태그", "emoji-🔥"))
+                .whatIDid(body)
+                .whatILearned("UTF-8 직렬화는 Jackson 이 알아서 처리")
+                .problems("")
+                .tomorrow("내일도 화이팅 💪")
+                .mood(Mood.GOOD)
+                .createdAt(now)
+                .updatedAt(now)
+                .schemaVersion(1)
+                .build();
+
+        repository.save(log);
+        DevLog loaded = repository.findById(new DevLogId("utf8-id")).orElseThrow();
+
+        assertThat(loaded.getTitle()).isEqualTo("UTF-8 라운드트립 🇰🇷");
+        assertThat(loaded.getWhatIDid()).isEqualTo(body);
+        assertThat(loaded.getTomorrow()).isEqualTo("내일도 화이팅 💪");
+        assertThat(loaded.getTags()).containsExactly("한글-태그", "emoji-🔥");
+    }
+
+    @Test
+    void findAll_sameDate_multipleEntriesCoexist() {
+        // {date}_{id}.json 규칙 덕분에 같은 날짜에 N건 저장해도 충돌 없음
+        repository.save(sampleLog("dup-1", "2026-05-18", "오전 회고"));
+        repository.save(sampleLog("dup-2", "2026-05-18", "오후 회고"));
+        repository.save(sampleLog("dup-3", "2026-05-18", "저녁 회고"));
+
+        List<DevLog> all = repository.findAll();
+        assertThat(all).hasSize(3);
+        assertThat(all).extracting(DevLog::getId)
+                .containsExactlyInAnyOrder("dup-1", "dup-2", "dup-3");
+
+        assertThat(repository.findById(new DevLogId("dup-2")).orElseThrow().getTitle())
+                .isEqualTo("오후 회고");
+    }
+
+    @Test
+    void findAll_ignoresLeftoverTmpFiles() throws IOException {
+        // 크래시로 남은 .tmp 파일이 디렉토리에 있어도 findAll 결과에 안 섞임
+        repository.save(sampleLog("real-id", "2026-05-18", "정상 회고"));
+        Files.writeString(logsDir.resolve("2026-05-18_orphan.json.tmp"), "garbage-not-an-envelope");
+
+        List<DevLog> all = repository.findAll();
+        assertThat(all).hasSize(1);
+        assertThat(all.get(0).getId()).isEqualTo("real-id");
+    }
+
+    @Test
+    void findById_corruptedEnvelope_throws() throws IOException {
+        // 손상된 envelope 파일을 읽으면 IllegalStateException — 조용한 데이터 손실 차단
+        Path corrupted = logsDir.resolve("2026-05-18_corrupt-id.json");
+        Files.writeString(corrupted, "{\"v\":1,\"alg\":\"AES-256-GCM\",\"nonce\":\"AAAA\",\"ct\":\"AAAA\"}",
+                StandardCharsets.UTF_8);
+
+        assertThatThrownBy(() -> repository.findById(new DevLogId("corrupt-id")))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void save_preservesSchemaVersionAndTimestamps() {
+        // schemaVersion + ISO-8601 offset timestamp 가 라운드트립 후에도 보존
+        OffsetDateTime created = OffsetDateTime.of(2026, 5, 18, 10, 0, 0, 0, ZoneOffset.ofHours(9));
+        OffsetDateTime updated = created.plusHours(2);
+        DevLog log = DevLog.builder()
+                .id("meta-id")
+                .date("2026-05-18")
+                .title("메타데이터 보존")
+                .tags(List.of())
+                .whatIDid("x").whatILearned("x").problems("x").tomorrow("x")
+                .mood(Mood.SOSO)
+                .createdAt(created)
+                .updatedAt(updated)
+                .schemaVersion(1)
+                .build();
+
+        repository.save(log);
+        DevLog loaded = repository.findById(new DevLogId("meta-id")).orElseThrow();
+
+        assertThat(loaded.getSchemaVersion()).isEqualTo(1);
+        assertThat(loaded.getCreatedAt().toInstant()).isEqualTo(created.toInstant());
+        assertThat(loaded.getUpdatedAt().toInstant()).isEqualTo(updated.toInstant());
     }
 }
