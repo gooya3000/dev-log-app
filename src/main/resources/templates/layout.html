@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      xmlns:sec="http://www.thymeleaf.org/extras/spring-security">
+<head>
+<style th:fragment="commonStyles">
+    body { font-family: sans-serif; max-width: 900px; margin: 0 auto; padding: 1rem; }
+    nav { margin-bottom: 1.5rem; border-bottom: 1px solid #ccc; padding-bottom: 0.5rem; }
+    nav a { margin-right: 1rem; text-decoration: none; color: #333; }
+    .error { color: #c00; }
+    .info { color: #060; }
+    label { display: block; margin-top: 0.5rem; font-weight: bold; }
+    input, textarea, select { width: 100%; padding: 0.4rem; margin-top: 0.25rem; box-sizing: border-box; }
+    textarea { height: 6rem; }
+    button { margin-top: 1rem; padding: 0.5rem 1.2rem; cursor: pointer; }
+</style>
+</head>
+<body>
+
+<nav th:fragment="nav">
+    <a href="/">DevLog</a>
+    <span sec:authorize="hasRole('USER')">
+        <a th:href="@{/logs}">회고 목록</a>
+        <a th:href="@{/logs/new}">새 회고</a>
+        <form th:action="@{/logout}" method="post" style="display:inline">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button type="submit" style="background:none;border:none;color:#666;cursor:pointer;padding:0;">로그아웃</button>
+        </form>
+    </span>
+    <span sec:authorize="hasRole('ADMIN')">
+        <a th:href="@{/vault/users}">사용자 관리</a>
+        <form th:action="@{/vault/logout}" method="post" style="display:inline">
+            <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+            <button type="submit" style="background:none;border:none;color:#666;cursor:pointer;padding:0;">관리자 로그아웃</button>
+        </form>
+    </span>
+    <span sec:authorize="!isAuthenticated()">
+        <a th:href="@{/unlock}">로그인</a>
+    </span>
+</nav>
+
+</body>
+</html>

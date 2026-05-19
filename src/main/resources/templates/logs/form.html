@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevLog — 회고 작성</title>
+    <style th:replace="~{layout :: commonStyles}"></style>
+</head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+
+<h1 th:text="${isNew} ? '새 회고 작성' : '회고 수정'">회고</h1>
+
+<form th:action="${isNew} ? @{/logs} : @{/logs/{id}(id=${logId})}"
+      th:object="${devLogForm}" method="post">
+    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+    <label for="date">날짜 *</label>
+    <input type="date" id="date" th:field="*{date}">
+    <span class="error" th:if="${#fields.hasErrors('date')}" th:errors="*{date}"></span>
+
+    <label for="title">제목 *</label>
+    <input type="text" id="title" th:field="*{title}" placeholder="오늘의 제목">
+    <span class="error" th:if="${#fields.hasErrors('title')}" th:errors="*{title}"></span>
+
+    <label for="tags">태그 (콤마 구분)</label>
+    <input type="text" id="tags" th:field="*{tags}" placeholder="spring, java, io">
+
+    <label for="whatIDid">오늘 한 일 *</label>
+    <textarea id="whatIDid" th:field="*{whatIDid}" placeholder="오늘 무엇을 했나요?"></textarea>
+    <span class="error" th:if="${#fields.hasErrors('whatIDid')}" th:errors="*{whatIDid}"></span>
+
+    <label for="whatILearned">배운 것 *</label>
+    <textarea id="whatILearned" th:field="*{whatILearned}" placeholder="무엇을 배웠나요?"></textarea>
+    <span class="error" th:if="${#fields.hasErrors('whatILearned')}" th:errors="*{whatILearned}"></span>
+
+    <label for="problems">막힌 부분 / 이슈</label>
+    <textarea id="problems" th:field="*{problems}" placeholder="어디서 막혔나요?"></textarea>
+
+    <label for="tomorrow">내일 할 일</label>
+    <textarea id="tomorrow" th:field="*{tomorrow}" placeholder="내일 무엇을 할 건가요?"></textarea>
+
+    <label for="mood">기분</label>
+    <select id="mood" th:field="*{mood}">
+        <option value="">-- 선택 --</option>
+        <option th:each="m : ${moods}" th:value="${m}" th:text="${m}"></option>
+    </select>
+
+    <button type="submit" th:text="${isNew} ? '저장' : '수정 저장'">저장</button>
+    <a th:href="${isNew} ? @{/logs} : @{/logs/{id}(id=${logId})}" style="margin-left:0.5rem;">취소</a>
+</form>
+</body>
+</html>

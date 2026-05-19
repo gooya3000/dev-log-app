@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevLog — 회고 목록</title>
+    <style th:replace="~{layout :: commonStyles}"></style>
+</head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+
+<h1>회고 목록</h1>
+<a th:href="@{/logs/new}"><button>새 회고 작성</button></a>
+
+<div th:if="${#lists.isEmpty(logs)}" style="margin-top:1rem; color:#666;">
+    아직 회고가 없습니다.
+</div>
+
+<table th:if="${!#lists.isEmpty(logs)}" style="width:100%; border-collapse:collapse; margin-top:1rem;">
+    <thead>
+    <tr style="border-bottom:2px solid #333;">
+        <th style="text-align:left; padding:0.4rem;">날짜</th>
+        <th style="text-align:left; padding:0.4rem;">제목</th>
+        <th style="text-align:left; padding:0.4rem;">태그</th>
+        <th style="text-align:left; padding:0.4rem;">기분</th>
+    </tr>
+    </thead>
+    <tbody>
+    <tr th:each="log : ${logs}" style="border-bottom:1px solid #eee;">
+        <td style="padding:0.4rem;" th:text="${log.date}"></td>
+        <td style="padding:0.4rem;">
+            <a th:href="@{/logs/{id}(id=${log.id})}" th:text="${log.title}"></a>
+        </td>
+        <td style="padding:0.4rem;" th:text="${#strings.listJoin(log.tags, ', ')}"></td>
+        <td style="padding:0.4rem;" th:text="${log.mood}"></td>
+    </tr>
+    </tbody>
+</table>
+</body>
+</html>

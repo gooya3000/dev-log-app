@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevLog — 사용자 생성</title>
+    <style th:replace="~{layout :: commonStyles}"></style>
+</head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+
+<h1>새 사용자 생성</h1>
+
+<form th:action="@{/vault/users}" th:object="${userCreateForm}" method="post">
+    <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
+
+    <label for="userId">사용자 ID *</label>
+    <input type="text" id="userId" th:field="*{userId}" placeholder="예: alice">
+    <span class="error" th:if="${#fields.hasErrors('userId')}" th:errors="*{userId}"></span>
+
+    <label for="passphrase">초기 Passphrase *</label>
+    <input type="password" id="passphrase" th:field="*{passphrase}" autocomplete="new-password">
+    <span class="error" th:if="${#fields.hasErrors('passphrase')}" th:errors="*{passphrase}"></span>
+
+    <button type="submit">생성</button>
+    <a th:href="@{/vault/users}" style="margin-left:0.5rem;">취소</a>
+</form>
+</body>
+</html>

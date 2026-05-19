@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevLog — 오류</title>
+    <style th:replace="~{layout :: commonStyles}"></style>
+</head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+
+<h1>오류가 발생했습니다</h1>
+
+<p class="error">
+    <span th:if="${status}" th:text="${status} + ' — '"></span>
+    <span th:if="${message}" th:text="${message}">요청을 처리할 수 없습니다.</span>
+    <span th:unless="${message}">요청을 처리할 수 없습니다.</span>
+</p>
+
+<a th:href="@{/}"><button>홈으로</button></a>
+</body>
+</html>

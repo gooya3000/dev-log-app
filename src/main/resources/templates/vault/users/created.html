@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevLog — 사용자 생성 완료</title>
+    <style th:replace="~{layout :: commonStyles}"></style>
+</head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+
+<h1>사용자 생성 완료</h1>
+
+<div style="border:2px solid #c00; padding:1rem; margin:1rem 0; background:#fff8f8;">
+    <strong>주의: 이 화면은 한 번만 표시됩니다. 지금 바로 Passphrase를 기록하세요.</strong>
+    <p>사용자 ID: <code th:text="${userId}"></code></p>
+    <p>초기 Passphrase: <code th:text="${initialPassphrase}" style="font-size:1.1em;"></code></p>
+</div>
+
+<p class="info">Passphrase를 비밀번호 매니저에 저장한 후 이 페이지를 닫으세요.</p>
+<a th:href="@{/vault/users}"><button>사용자 목록으로</button></a>
+</body>
+</html>
