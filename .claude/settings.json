@@ -1,0 +1,31 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Edit(src/**)",
+      "Write(src/**)",
+      "Edit(build.gradle)",
+      "Edit(application.properties)",
+      "Edit(src/main/resources/templates/**)",
+      "Write(src/main/resources/templates/**)",
+      "Bash(./gradlew *)",
+      "Bash(mkdir *)",
+      "Bash(ls *)",
+      "Bash(find . *)",
+      "Bash(git diff*)",
+      "Bash(git status*)",
+      "Bash(git log*)",
+      "Bash(git grep*)"
+    ],
+    "deny": [
+      "Read(application-local.properties)",
+      "Read(**/application-local.properties)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Edit(application-local.properties)",
+      "Write(application-local.properties)"
+    ]
+  }
+}
