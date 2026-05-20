@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevLog — 블로그 초안</title>
+    <style th:replace="~{layout :: commonStyles}"></style>
+    <style>
+        .draft-box {
+            background: #f7f7f7;
+            border: 1px solid #ddd;
+            padding: 1rem;
+            white-space: pre-wrap;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+            max-height: 32rem;
+            overflow-y: auto;
+        }
+        .copy-feedback { color: #060; margin-left: 0.5rem; }
+    </style>
+</head>
+<body>
+<nav th:replace="~{layout :: nav}"></nav>
+
+<h1>블로그 초안</h1>
+<p style="color:#666;">
+    원본 회고:
+    <a th:href="@{/logs/{id}(id=${log.id})}" th:text="${log.title}">제목</a>
+</p>
+
+<div style="margin-bottom:0.5rem;">
+    <button type="button" onclick="copyDraft()">Markdown 복사</button>
+    <span id="copyFeedback" class="copy-feedback"></span>
+</div>
+
+<pre id="draft" class="draft-box" th:text="${markdown}">생성된 마크다운</pre>
+
+<div style="margin-top:1rem;">
+    <a th:href="@{/logs/{id}(id=${log.id})}">상세로 돌아가기</a>
+</div>
+
+<script>
+    function copyDraft() {
+        const text = document.getElementById('draft').innerText;
+        const feedback = document.getElementById('copyFeedback');
+        navigator.clipboard.writeText(text).then(
+            () => { feedback.textContent = '복사 완료'; },
+            () => { feedback.textContent = '복사 실패 — 직접 선택해 복사하세요'; }
+        );
+    }
+</script>
+</body>
+</html>
