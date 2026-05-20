@@ -52,15 +52,16 @@
 <section style="margin-top:2rem; padding-top:1rem; border-top:1px solid #ccc;">
     <h2>블로그 초안 생성</h2>
     <p style="color:#666; font-size:0.9rem;">
-        본인의 OpenAI API 키를 입력하면 이 회고를 기반으로 기술 블로그 초안(Markdown)을 받아옵니다.
+        본인의 Gemini API 키를 입력하면 이 회고를 기반으로 기술 블로그 초안(Markdown)을 받아옵니다.
         키는 요청 1회 사용 후 즉시 폐기되며 서버에 저장되지 않습니다.
+        키는 <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener">Google AI Studio</a> 에서 무료로 발급할 수 있습니다.
     </p>
 
     <p th:if="${aiError}" class="error" th:text="${aiError}"></p>
 
     <form th:action="@{/logs/{id}/blog-draft(id=${log.id})}" method="post">
         <input type="hidden" th:name="${_csrf.parameterName}" th:value="${_csrf.token}">
-        <label for="apiKey">OpenAI API 키</label>
+        <label for="apiKey">Gemini API 키</label>
         <input type="password" id="apiKey" name="apiKey" autocomplete="off" required>
         <p th:if="${blogDraftError}" class="error" th:text="${blogDraftError}"></p>
         <button type="submit">초안 생성</button>

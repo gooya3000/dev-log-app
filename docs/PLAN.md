@@ -156,8 +156,7 @@ com.example.devlogapp
 │
 ├── ai
 │   ├── AiClient                 // 인터페이스 — generate(prompt, apiKey): String
-│   ├── ClaudeAiClient           // 어댑터 (Claude). 키는 호출 인자로만 받음
-│   ├── OpenAiAiClient           // 어댑터 (OpenAI). 둘 중 하나만 우선 구현
+│   ├── GeminiAiClient           // 어댑터 (Google Gemini generateContent). 키는 호출 인자로만 받음
 │   └── prompt
 │       └── BlogPromptBuilder    // DevLog → 프롬프트 텍스트
 │
@@ -459,7 +458,7 @@ com.example.devlogapp
 
 ### 5.2 application.properties에 두지 않을 것
 
-- `anthropic.api-key=...` 같은 줄을 **절대 만들지 않는다.**
+- `gemini.api-key=...` / `anthropic.api-key=...` 같은 줄을 **절대 만들지 않는다.**
 - `application.properties`에는 키 관련 환경변수 placeholder조차 두지 않는다 — 두면 "환경변수에 키 있으면 자동으로 쓰는" 동작이 추가돼서 이번 단계 정책(매 요청 입력)이 깨진다.
 
 ### 5.3 코드 / 로그에서 키 다루는 원칙
@@ -498,7 +497,7 @@ com.example.devlogapp
 - 둘 다 분실 → 영구 손실, 복구 불가
 
 **보안 주의:**
-- 블로그 초안 생성 시 본인의 Claude/OpenAI API 키를 폼에 직접 입력. 입력한 키는 1회 사용 후 폐기.
+- 블로그 초안 생성 시 본인의 Gemini API 키를 폼에 직접 입력. 입력한 키는 1회 사용 후 폐기. (키는 [Google AI Studio](https://aistudio.google.com/apikey) 에서 무료 발급)
 - `application-local.properties` 는 `.gitignore` — 절대 커밋되지 않음을 매번 확인.
 - 로컬에서만 띄워 사용 권장 (HTTPS 없이 외부 노출 금지).
 
@@ -581,7 +580,7 @@ com.example.devlogapp
 | 0 | (메인 세션 직접) | 현 `build.gradle`, 추가할 의존성(`spring-boot-starter-validation`), JSON 저장 경로 | `build.gradle` 수정, `application.properties`에 `devlog.storage.root` 추가, `.gitignore`에 `data/` 추가 |
 | 1 | `spring-backend` | 본 문서 §1.2, §3, §4 **전체(§4.5 DEK 래핑 + admin/user 분리 포함)**, §5.6 user passphrase 정책, §5.7 admin passphrase 정책 | `DevLog`·`User`·`UserId`·`DevLogRepository`·`JsonDevLogRepository`·`VaultMetaRepository`, **`vault` 패키지 전체**(`Vault`, `VaultCipher`, `KeyWrapper`, `PassphraseKdf`, `EnvelopeV1`, `VaultMeta`), **`security` 패키지**(`SecurityConfig`, `AdminAuthenticationProvider`, `UserAuthenticationProvider`, `CurrentSession`), **service 4종**(`VaultBootstrapService`, `UserAdminService`, `UserAuthService`, `DevLogService`), `AdminProperties` 빈. 테스트: ① bootstrap → adminWrappedDek 생성·저장, ② admin login → ROLE_ADMIN 부여, ③ admin이 user 생성 → users[] 엔트리·초기 passphrase 검증, ④ user login round-trip(passphrase → H_user 비교 → DEK unwrap), ⑤ admin reset → 옛 passphrase 불가·새 passphrase 가능·DEK 그대로, ⑥ DEK 변경 없이 user passphrase 회전 시 회고 파일 재암호화 X 검증, ⑦ envelope 변조 GCM 거부, ⑧ admin passphrase 누락/default 시 fail-fast, ⑨ admin passphrase 로그 노출 없음 (로그 캡처 테스트), ⑩ 표준 CRUD 라운드트립 |
 | 2-A | `spring-backend` | 본 문서 §2(URL 표 + 템플릿 목록), §3의 web 패키지, §5.6/§5.7 폼 처리 정책 | 11개 Thymeleaf 템플릿 (layout + unlock + logs 4종 + vault/login + vault/users 5종 + error), Spring Security 통합 (`thymeleaf-extras-springsecurity6` 의 `sec:authorize`), 컨트롤러 4종(`AuthController`, `LogController`, `AdminAuthController`, `AdminUserController`), 폼 검증. `MockMvc` + `@WithMockUser` 슬라이스 테스트로 ① 미인증 시 적절한 로그인 페이지 리다이렉트, ② ROLE_USER 만 `/logs` 진입, ③ ROLE_ADMIN 만 `/vault/users` 진입, ④ CSRF 토큰 동작 확인 |
-| 2-B | `ai-integration` | §3의 ai 패키지 + §5 키 정책 + "DevLog 1건 → 블로그용 마크다운" 변환 사양 + (메인이 지정한) Claude/OpenAI 중 어느 쪽인지 | `AiClient` 인터페이스(`generate(prompt, apiKey)`), 어댑터 1개, `BlogPromptBuilder`. WireMock 테스트 + **키 노출 검증 테스트 필수** |
+| 2-B | `ai-integration` | §3의 ai 패키지 + §5 키 정책 + "DevLog 1건 → 블로그용 마크다운" 변환 사양 + 어댑터 대상 (현재: Gemini generateContent) | `AiClient` 인터페이스(`generate(prompt, apiKey)`), 어댑터 1개, `BlogPromptBuilder`. WireMock 테스트 + **키 노출 검증 테스트 필수** |
 | 2-C | `test-engineer` | atomic write·동시 read·UTF-8·`schemaVersion` 누락 케이스 | 저장소 보강 단위 테스트들 |
 | 3 (코드) | (메인 세션) | Phase 2-A, 2-B 산출물 | `BlogDraftController` + `blog-draft.html`, "복사" 버튼, 통합 테스트 1개 |
 | 3 (리뷰) | `code-reviewer` | Phase 1~3 변경 diff 전체 | 체크리스트 기반 PASS/FAIL 리포트 |

@@ -23,21 +23,22 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 보안 테스트: apiKey 가 반환값·예외 메시지·로그 어디에도 노출되지 않음을 검증.
  * PLAN.md §5.3, 에이전트 시스템 프롬프트 "보안 테스트 (필수)" 항목.
  */
-class OpenAiAiClientApiKeyLeakTest {
+class GeminiAiClientApiKeyLeakTest {
 
-    private static final String TEST_API_KEY = "sk-test-super-secret-key-do-not-leak-xyzabc";
+    private static final String TEST_API_KEY = "AIzaSyTestSuperSecretKeyDoNotLeakXYZ123";
+    private static final String MODEL = "gemini-2.5-flash";
+    private static final String GENERATE_PATH = "/v1beta/models/" + MODEL + ":generateContent";
 
     private WireMockServer wireMock;
-    private OpenAiAiClient client;
+    private GeminiAiClient client;
     private ListAppender logAppender;
 
     @BeforeEach
     void setUp() {
         wireMock = new WireMockServer(WireMockConfiguration.wireMockConfig().dynamicPort());
         wireMock.start();
-        client = new OpenAiAiClient("gpt-4o-mini", "http://localhost:" + wireMock.port());
+        client = new GeminiAiClient(MODEL, "http://localhost:" + wireMock.port());
 
-        // logback ListAppender 설정
         logAppender = new ListAppender();
         logAppender.start();
         Logger rootLogger = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
@@ -55,12 +56,12 @@ class OpenAiAiClientApiKeyLeakTest {
 
     @Test
     void successCase_returnValueDoesNotContainApiKey() {
-        wireMock.stubFor(post(urlEqualTo("/v1/chat/completions"))
+        wireMock.stubFor(post(urlEqualTo(GENERATE_PATH))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("""
-                                {"choices":[{"message":{"role":"assistant","content":"블로그 결과"}}]}
+                                {"candidates":[{"content":{"parts":[{"text":"블로그 결과"}]}}]}
                                 """)));
 
         String result = client.generate("프롬프트", TEST_API_KEY);
@@ -70,12 +71,12 @@ class OpenAiAiClientApiKeyLeakTest {
 
     @Test
     void successCase_logDoesNotContainApiKey() {
-        wireMock.stubFor(post(urlEqualTo("/v1/chat/completions"))
+        wireMock.stubFor(post(urlEqualTo(GENERATE_PATH))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("""
-                                {"choices":[{"message":{"role":"assistant","content":"결과"}}]}
+                                {"candidates":[{"content":{"parts":[{"text":"결과"}]}}]}
                                 """)));
 
         client.generate("프롬프트", TEST_API_KEY);
@@ -87,7 +88,7 @@ class OpenAiAiClientApiKeyLeakTest {
 
     @Test
     void http401Case_exceptionMessageDoesNotContainApiKey() {
-        wireMock.stubFor(post(urlEqualTo("/v1/chat/completions"))
+        wireMock.stubFor(post(urlEqualTo(GENERATE_PATH))
                 .willReturn(aResponse()
                         .withStatus(401)
                         .withBody("{\"error\":{\"message\":\"Incorrect API key provided: " + TEST_API_KEY + "\"}}")));
@@ -99,7 +100,7 @@ class OpenAiAiClientApiKeyLeakTest {
 
     @Test
     void http400Case_logDoesNotContainApiKey() {
-        wireMock.stubFor(post(urlEqualTo("/v1/chat/completions"))
+        wireMock.stubFor(post(urlEqualTo(GENERATE_PATH))
                 .willReturn(aResponse()
                         .withStatus(400)
                         .withBody("{\"error\":{\"message\":\"bad request\"}}")));
@@ -107,7 +108,6 @@ class OpenAiAiClientApiKeyLeakTest {
         try {
             client.generate("프롬프트", TEST_API_KEY);
         } catch (AiException ignored) {
-            // 예외 자체는 예상된 것
         }
 
         assertNoApiKeyInLogs();
@@ -117,7 +117,7 @@ class OpenAiAiClientApiKeyLeakTest {
 
     @Test
     void http500Case_exceptionMessageDoesNotContainApiKey() {
-        wireMock.stubFor(post(urlEqualTo("/v1/chat/completions"))
+        wireMock.stubFor(post(urlEqualTo(GENERATE_PATH))
                 .willReturn(aResponse()
                         .withStatus(500)
                         .withBody("{\"error\":{\"message\":\"Internal server error, key=" + TEST_API_KEY + "\"}}")));
@@ -129,7 +129,7 @@ class OpenAiAiClientApiKeyLeakTest {
 
     @Test
     void http503Case_logDoesNotContainApiKey() {
-        wireMock.stubFor(post(urlEqualTo("/v1/chat/completions"))
+        wireMock.stubFor(post(urlEqualTo(GENERATE_PATH))
                 .willReturn(aResponse()
                         .withStatus(503)
                         .withBody("{\"error\":{\"message\":\"service unavailable\"}}")));
@@ -137,33 +137,52 @@ class OpenAiAiClientApiKeyLeakTest {
         try {
             client.generate("프롬프트", TEST_API_KEY);
         } catch (AiException ignored) {
-            // 예외 자체는 예상된 것
         }
 
         assertNoApiKeyInLogs();
     }
 
-    // ── 전송 검증: apiKey 가 Authorization 헤더로 실제 전달됐는지 ──
+    // ── 전송 검증: apiKey 가 x-goog-api-key 헤더로 실제 전달됐는지 ──
 
     @Test
-    void apiKeyIsTransmittedInAuthorizationHeader() {
-        wireMock.stubFor(post(urlEqualTo("/v1/chat/completions"))
+    void apiKeyIsTransmittedInGoogApiKeyHeader() {
+        wireMock.stubFor(post(urlEqualTo(GENERATE_PATH))
                 .willReturn(aResponse()
                         .withStatus(200)
                         .withHeader("Content-Type", "application/json")
                         .withBody("""
-                                {"choices":[{"message":{"role":"assistant","content":"ok"}}]}
+                                {"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}
                                 """)));
 
         client.generate("프롬프트", TEST_API_KEY);
 
-        List<LoggedRequest> requests = wireMock.findAll(postRequestedFor(urlEqualTo("/v1/chat/completions")));
+        List<LoggedRequest> requests = wireMock.findAll(postRequestedFor(urlEqualTo(GENERATE_PATH)));
         assertThat(requests).hasSize(1);
-        assertThat(requests.get(0).getHeader("Authorization"))
-                .isEqualTo("Bearer " + TEST_API_KEY);
+        assertThat(requests.get(0).getHeader("x-goog-api-key")).isEqualTo(TEST_API_KEY);
     }
 
-    // ── 필드 reflection: OpenAiAiClient 인스턴스에 apiKey 가 stash 됐는지 ──
+    // ── 키가 URL 쿼리에 새지 않았는지 (Google 은 ?key= 도 허용하므로 명시 검증) ──
+
+    @Test
+    void apiKeyIsNotEmbeddedInUrl() {
+        wireMock.stubFor(post(urlEqualTo(GENERATE_PATH))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("""
+                                {"candidates":[{"content":{"parts":[{"text":"ok"}]}}]}
+                                """)));
+
+        client.generate("프롬프트", TEST_API_KEY);
+
+        List<LoggedRequest> all = wireMock.findAll(postRequestedFor(urlPathEqualTo(GENERATE_PATH)));
+        assertThat(all).hasSize(1);
+        assertThat(all.get(0).getUrl())
+                .as("apiKey 가 URL 에 노출되면 안 됨 — 헤더 인증만 사용")
+                .doesNotContain(TEST_API_KEY);
+    }
+
+    // ── 필드 reflection: GeminiAiClient 인스턴스에 apiKey 가 stash 됐는지 ──
 
     @Test
     void clientInstance_hasNoApiKeyField() throws Exception {
