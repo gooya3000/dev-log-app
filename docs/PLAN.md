@@ -607,7 +607,7 @@ com.example.devlogapp
 | `spring-backend` | sonnet | 풀권한 | Phase 1 (도메인+저장소), Phase 2-A (웹 CRUD) |
 | `ai-integration` | sonnet | 풀권한 | Phase 2-B (AI 어댑터) — §5 키 정책을 시스템 프롬프트에 박아둠 |
 | `test-engineer` | haiku | 풀권한 (단, 프로덕션 코드 수정 금지를 본문 규칙으로) | Phase 2-C, 그리고 다른 Phase의 테스트 보강 |
-| `code-reviewer` | opus | **읽기 전용** (Edit/Write 없음) | 각 Phase 머지 직전, Phase 3 통합 전 |
+| `code-reviewer` | opus | **읽기 전용** (Edit/Write 없음) | 각 Phase 마무리 시점, Phase 3 통합 직후 (main 직푸시 워크플로우라 "머지 전" 트리거는 없음 — 단계 종료마다 한 번씩) |
 
 빌트인 에이전트는 보조 용도로:
 - 코드 탐색·"어디 정의돼 있나?" 류 → `Explore`
@@ -627,7 +627,7 @@ com.example.devlogapp
    - `2a37f13`: validation, storage root, .gitignore 기본
    - `5aa478c`: vault 암호화 정책 1차 (이번에 admin/user 모델로 재정비)
    - 본 커밋: Spring Security 의존성 + admin passphrase 정책 + DEK 래핑 + admin/user 분리 확정 + `application-local.properties.example`
-3. **Phase 1 (도메인 + 저장소 + vault + security)** — `spring-backend` 서브에이전트에 위임. §6.2 Phase 1 행 그대로. 범위가 매우 커졌으니 머지 직전 `code-reviewer` 필수.
-4. Phase 1 머지 후, **Phase 2-A · 2-B · 2-C 병렬 위임.** 2-A 는 Spring Security 통합 UI 까지 포함.
+3. **Phase 1 (도메인 + 저장소 + vault + security)** — `spring-backend` 서브에이전트에 위임. §6.2 Phase 1 행 그대로. 범위가 매우 커졌으니 단계 마무리 시점에 `code-reviewer` 필수.
+4. Phase 1 완료 후, **Phase 2-A · 2-B · 2-C 병렬 위임.** 2-A 는 Spring Security 통합 UI 까지 포함.
 5. **Phase 3**: 메인 세션에서 통합.
 6. **Phase 4**: 메인 세션이 `./gradlew bootRun` 후 직접 브라우저 검수 — 첫 실행이면 `/vault/login` 으로 가서 admin 로그인 → 사용자 생성 → 사용자 로그인 → 회고 작성 흐름까지.

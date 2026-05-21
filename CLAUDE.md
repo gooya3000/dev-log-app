@@ -61,13 +61,13 @@
 - `spring-backend` (sonnet, 풀권한) — Phase 1, 2-A
 - `ai-integration` (sonnet, 풀권한) — Phase 2-B. 시스템 프롬프트에 §5 키 정책이 박혀 있음
 - `test-engineer` (haiku, 프로덕션 코드 수정 금지 규칙) — Phase 2-C, 테스트 보강
-- `code-reviewer` (opus, **읽기 전용**) — Phase 머지 직전 리뷰. Edit/Write 도구 없음
+- `code-reviewer` (opus, **읽기 전용**) — 단계 마무리 시점 통합 리뷰. main 직푸시 워크플로우라 "머지 전" 트리거는 없음. Edit/Write 도구 없음
 
 위임 시 규칙:
 - 브리핑에 **PLAN.md의 어느 절/Phase인지** 항상 명시.
 - "이해를 위임하지 않는다." 구체적인 파일/시그니처/통과시켜야 할 테스트로 좁혀서 위임.
 - Phase 1(도메인+저장소)이 후속 작업의 계약이라 단독으로 먼저 끝낸다. Phase 2-A/2-B/2-C는 병렬.
-- 서브에이전트의 "완료했습니다"는 의도일 뿐. 메인 세션이 diff·테스트로 직접 확인. 머지 직전엔 `code-reviewer` 한 번 더 돌릴 것.
+- 서브에이전트의 "완료했습니다"는 의도일 뿐. 메인 세션이 diff·테스트로 직접 확인. 단계 마무리 시점엔 `code-reviewer` 한 번 더 돌릴 것.
 
 ## 커뮤니케이션
 
