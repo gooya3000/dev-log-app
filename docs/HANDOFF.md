@@ -18,14 +18,19 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 | 3 (리뷰) | `code-reviewer` 통합 검토 | — | ⏳ R-3 와 함께 |
 | 4 | E2E 수동 검수 | — | 🟡 일부 (구버전 모델 기준 — R-3 후 재실행 필요) |
 | **R-PLAN** | PLAN.md vault 모델 전환 (공유 DEK → 사용자별 DEK + admin wrap) | `436d826` | ✅ |
-| **R-1** | vault 모델 재구축 (도메인·vault·storage·service·security) | — | ⏳ **다음 작업** |
-| **R-2** | 웹 화면 재구축 (`/register` 추가, `/vault/users/new` 제거) | — | ⏳ |
+| **R-1** | vault 모델 재구축 (도메인·vault·storage·service·security) | `a07f614` | ✅ |
+| **R-2** | 웹 화면 재구축 (`/register` 추가, `/vault/users/new` 제거) | — | ⏳ **다음 작업** |
 | **R-3** | code-reviewer + 메인 E2E 점검 | — | ⏳ |
 
 ---
 
 ## 최근 결정 / 변경
 
+- **2026-05-21 — Phase R-1 완료** (`a07f614`). `spring-backend` 위임으로 vault 모델 재구축.
+  - 도메인·service·storage·security 17개 파일 변경/신규. `./gradlew test` 90개 통과 / 0 실패.
+  - PLAN.md §6.2 R-1 의 9가지 Done 기준 (bootstrap·두 wrap 사본·login round-trip·reset 시 DEK 동일·사용자 격리·adminWrappedDek 변조 탐지 등) 모두 커버.
+  - 신규: `UserRegistrationService` (셀프 가입), `UserIsolationTest` (사용자 격리).
+  - 회고 저장 경로 `data/logs/{userId}/{date}_{id}.json` 으로 사용자별 서브디렉토리 분리 적용.
 - **2026-05-21 — Vault 모델 전환** (`436d826`). 공유 DEK + 관리자 사용자 생성 → **사용자별 DEK + 셀프 가입 + admin 마스터키 wrap**.
   - 셀프 가입(`POST /register`, permitAll). `/vault/users/new` 제거.
   - 사용자마다 `DEK_user` 1개, `userWrappedDek` + `adminWrappedDek` 두 사본을 `users[]` 엔트리에 저장.
@@ -41,20 +46,14 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 
 ## 다음 액션
 
-> **현재 컨텍스트는 모델 설명/PLAN 갱신으로 길어진 상태.** R-1 부터는 새 세션에서 시작 권장. 새 세션 첫 메시지 예: "Phase R-1 시작. PLAN.md §6.2 R-1 행대로 `spring-backend` 위임."
-
-1. **Phase R-1 (vault 모델 재구축)** — `spring-backend` 위임. PLAN.md §6.2 R-1 행 그대로. 가장 큰 변경이라 단계 마무리에 `code-reviewer` 한 번.
-   - 건드릴 파일: `domain/User`, `vault/VaultMeta`, `storage/VaultMetaRepository`, `storage/JsonDevLogRepository`, `service/VaultBootstrapService`, 신규 `service/UserRegistrationService`, `service/UserAdminService` (createUser 제거), `service/UserAuthService`, `vault/Vault`, `security/UserAuthenticationProvider`.
-   - 건드리지 말 파일: `ai/**`, `web/BlogDraftController`, Phase 3 산출물.
-   - 기존 vault/storage/service 테스트도 새 모델로 마이그레이션 필요.
-2. **Phase R-2 (웹 화면 재구축)** — `spring-backend` 위임. R-1 완료 후.
+1. **Phase R-2 (웹 화면 재구축)** — `spring-backend` 위임. PLAN.md §6.2 R-2 행 그대로.
    - 신규: `web/RegisterController`, `web/form/UserRegisterForm`, `templates/register.html`.
    - 수정: `web/AdminUserController` (생성 액션 제거), `templates/vault/users/list.html`, `templates/unlock.html` (?registered 안내), `security/SecurityConfig` (/register permitAll).
    - 제거: `web/form/UserCreateForm`, `templates/vault/users/form.html`, `templates/vault/users/created.html`.
-3. **Phase R-3 (통합 점검)** — `code-reviewer` 리포트 + 메인 세션 `bootRun` E2E.
+2. **Phase R-3 (통합 점검)** — `code-reviewer` 리포트 + 메인 세션 `bootRun` E2E.
    - E2E 시나리오: 가입 → 로그인 → 회고 작성 → 로그아웃 → admin reset → 새 임시 passphrase 로 재로그인 (회고 그대로 보임) → admin 사용자 삭제 (디렉토리 사라짐).
-4. **Vault 재셋업** — R-3 통과 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase 20자+ 랜덤 또는 4단어+) → 회고 1~2건 작성 → `data/` 커밋·푸시.
-5. **Phase 4 체크리스트 명문화** — PLAN §6.2 의 "수동 체크리스트" 를 실제 항목으로 채우기.
+3. **Vault 재셋업** — R-3 통과 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase 20자+ 랜덤 또는 4단어+) → 회고 1~2건 작성 → `data/` 커밋·푸시.
+4. **Phase 4 체크리스트 명문화** — PLAN §6.2 의 "수동 체크리스트" 를 실제 항목으로 채우기.
 
 ---
 
