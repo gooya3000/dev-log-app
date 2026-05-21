@@ -96,8 +96,6 @@ public class SecurityConfig {
                 .invalidateHttpSession(true)
                 .permitAll()
             );
-            // CSRF 활성화 — /unlock CSRF ignoring 제거 (Phase 2-A TODO #2 완료)
-            // LogoutHandler 로 Vault.lock() 등록 — PLAN §5.6 "POST /logout 시 DEK 메모리 해제"
 
         return http.build();
     }
