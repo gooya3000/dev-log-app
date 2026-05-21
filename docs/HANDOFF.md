@@ -10,40 +10,61 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 | Phase | 내용 | 대표 커밋 | 상태 |
 |---|---|---|---|
 | 0 | 빌드/설정/Vault 설계 | `2a37f13`, `5aa478c`, `dee299c` | ✅ |
-| 1 | 도메인 + 저장소 + vault + security | `489481a` | ✅ |
-| 2-A | 웹 CRUD + Security UI | `4dace47` | ✅ |
+| 1 | 도메인 + 저장소 + vault + security (공유 DEK 모델) | `489481a` | ✅ → R-1 에서 재구축 |
+| 2-A | 웹 CRUD + Security UI (관리자 사용자 생성 모델) | `4dace47` | ✅ → R-2 에서 재구축 |
 | 2-B | AI 어댑터 + 프롬프트 빌더 | `da1f64f`, `07947a8` | ✅ |
 | 2-C | 저장소 테스트 보강 | `e6719de` | ✅ |
 | 3 (코드) | 블로그 초안 화면 통합 | `1c0a078` | ✅ |
-| 3 (리뷰) | `code-reviewer` 통합 검토 | — | ⏳ 미실시 |
-| 4 | E2E 수동 검수 | — | 🟡 일부 (블로그 초안 동작 확인 완료, 체크리스트 미명문화) |
+| 3 (리뷰) | `code-reviewer` 통합 검토 | — | ⏳ R-3 와 함께 |
+| 4 | E2E 수동 검수 | — | 🟡 일부 (구버전 모델 기준 — R-3 후 재실행 필요) |
+| **R-PLAN** | PLAN.md vault 모델 전환 (공유 DEK → 사용자별 DEK + admin wrap) | `436d826` | ✅ |
+| **R-1** | vault 모델 재구축 (도메인·vault·storage·service·security) | — | ⏳ **다음 작업** |
+| **R-2** | 웹 화면 재구축 (`/register` 추가, `/vault/users/new` 제거) | — | ⏳ |
+| **R-3** | code-reviewer + 메인 E2E 점검 | — | ⏳ |
 
 ---
 
 ## 최근 결정 / 변경
 
+- **2026-05-21 — Vault 모델 전환** (`436d826`). 공유 DEK + 관리자 사용자 생성 → **사용자별 DEK + 셀프 가입 + admin 마스터키 wrap**.
+  - 셀프 가입(`POST /register`, permitAll). `/vault/users/new` 제거.
+  - 사용자마다 `DEK_user` 1개, `userWrappedDek` + `adminWrappedDek` 두 사본을 `users[]` 엔트리에 저장.
+  - 회고 저장 경로 `data/logs/{userId}/{date}_{id}.json` 으로 사용자별 분리.
+  - 관리자 reset: `adminWrappedDek` 우회로로 `DEK_user` 회수 → `userWrappedDek` 만 재발급. `DEK_user`·`adminWrappedDek` 그대로.
+  - 사용자 삭제 시 `data/logs/{userId}/` 디렉토리 통째 제거.
+  - 부수 결정: 가입은 **오픈** (초대 코드 X), 본인 자율 passphrase 변경은 **NON-GOAL**.
 - **2026-05-21 — AI 어댑터 OpenAI → Gemini 로 교체** (`57b6ad7`). 무료 티어 사용이 목적.
   - 모델: `gemini-2.5-flash`. `gemini-2.0-flash` 는 본 프로젝트 키의 free tier 가 `limit:0` 으로 잡혀 사용 불가.
   - 키 발급처: [Google AI Studio](https://aistudio.google.com/apikey).
-- PLAN.md §3 패키지 트리·§5.2/§5.5/§6.2 의 OpenAI/Claude 언급 → Gemini 단일화.
 
 ---
 
 ## 다음 액션
 
-1. **Vault 재셋업** — 학습용 약한 passphrase 흔적을 지우려 `data/` 삭제 후 새 부트스트랩 완료. 본인이 `/vault/login` → `/vault/users/new` 에서 강한 passphrase (20자+ 랜덤 또는 4단어+) 로 사용자 생성 → `/unlock` → 회고 1~2건 작성.
-2. **`data/` 커밋** — 1번이 끝나면 `data/` 통째로 staged · 커밋·푸시. CLAUDE.md 정책상 ciphertext 라 공개 리포 commit OK.
-3. **`code-reviewer` 1회 실행** — Phase 1~3 누적 커밋(`489481a..HEAD`) 대상으로 통합 검토. main 직푸시 워크플로우라 "머지 전" 트리거는 없고, 단계 마무리 시점에 한 번 돌리는 용도.
-4. **Phase 4 체크리스트 명문화** — PLAN.md §6.2 의 "수동 체크리스트" 항목을 실제 항목으로 채워두기 (로그인 흐름, 회고 CRUD, 블로그 초안, 권한 분리 등).
+> **현재 컨텍스트는 모델 설명/PLAN 갱신으로 길어진 상태.** R-1 부터는 새 세션에서 시작 권장. 새 세션 첫 메시지 예: "Phase R-1 시작. PLAN.md §6.2 R-1 행대로 `spring-backend` 위임."
+
+1. **Phase R-1 (vault 모델 재구축)** — `spring-backend` 위임. PLAN.md §6.2 R-1 행 그대로. 가장 큰 변경이라 단계 마무리에 `code-reviewer` 한 번.
+   - 건드릴 파일: `domain/User`, `vault/VaultMeta`, `storage/VaultMetaRepository`, `storage/JsonDevLogRepository`, `service/VaultBootstrapService`, 신규 `service/UserRegistrationService`, `service/UserAdminService` (createUser 제거), `service/UserAuthService`, `vault/Vault`, `security/UserAuthenticationProvider`.
+   - 건드리지 말 파일: `ai/**`, `web/BlogDraftController`, Phase 3 산출물.
+   - 기존 vault/storage/service 테스트도 새 모델로 마이그레이션 필요.
+2. **Phase R-2 (웹 화면 재구축)** — `spring-backend` 위임. R-1 완료 후.
+   - 신규: `web/RegisterController`, `web/form/UserRegisterForm`, `templates/register.html`.
+   - 수정: `web/AdminUserController` (생성 액션 제거), `templates/vault/users/list.html`, `templates/unlock.html` (?registered 안내), `security/SecurityConfig` (/register permitAll).
+   - 제거: `web/form/UserCreateForm`, `templates/vault/users/form.html`, `templates/vault/users/created.html`.
+3. **Phase R-3 (통합 점검)** — `code-reviewer` 리포트 + 메인 세션 `bootRun` E2E.
+   - E2E 시나리오: 가입 → 로그인 → 회고 작성 → 로그아웃 → admin reset → 새 임시 passphrase 로 재로그인 (회고 그대로 보임) → admin 사용자 삭제 (디렉토리 사라짐).
+4. **Vault 재셋업** — R-3 통과 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase 20자+ 랜덤 또는 4단어+) → 회고 1~2건 작성 → `data/` 커밋·푸시.
+5. **Phase 4 체크리스트 명문화** — PLAN §6.2 의 "수동 체크리스트" 를 실제 항목으로 채우기.
 
 ---
 
 ## 알려진 주의사항
 
+- **모델 전환 진행 중 — 코드와 PLAN 불일치 상태.** PLAN.md §4.5 는 새 모델 (사용자별 DEK + admin wrap), 코드는 아직 구버전 (공유 DEK). R-1 ~ R-3 완료까지 이 갭이 유지된다. 새 코드 작성은 **반드시 PLAN.md 기준**.
 - **Passphrase 강도가 보안 경계의 전부.** 공개 리포 + PBKDF2 600k iters. 약한 passphrase 면 오프라인 brute-force 로 DEK 노출 가능. CLAUDE.md 의 "공개 리포 안전" 전제는 **강한 passphrase** 가 받쳐줘야 성립.
-- **Admin passphrase** 는 `application-local.properties` 평문 보관 (PLAN §5.7). 이 파일은 `.gitignore` — 절대 커밋 금지. `application-local.properties.example` 만 리포에 둠.
+- **Admin passphrase** 는 `application-local.properties` 평문 보관 (PLAN §5.7). 이 파일은 `.gitignore` — 절대 커밋 금지. `application-local.properties.example` 만 리포에 둠. admin 분실 시 reset 기능 영구 상실 + 신규 가입 시 `adminWrappedDek` 발급 불가 → 신규 가입 사실상 막힘.
 - **Gemini 호출 본문은 Google 서버에 일정 기간 잔존 가능** (무료 티어는 모델 개선 용도 활용 명시). 회고에 민감 정보 넣을 때 유의.
-- **DEK 는 메모리에만**. 디스크엔 wrap 된 형태로만. 어떤 경로로도 평문 DEK 가 파일에 떨어지면 설계 위반.
+- **DEK_user 는 메모리에만**. 디스크엔 wrap 된 형태로만 (사용자/admin 두 사본). 어떤 경로로도 평문 DEK 가 파일에 떨어지면 설계 위반.
 
 ---
 
@@ -51,4 +72,7 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 
 - 실행: `./gradlew bootRun`  → http://localhost:8080
 - 테스트 전체: `./gradlew test`
-- 진입점: `/vault/login` (admin), `/unlock` (user)
+- 진입점 (R-2 완료 후 기준):
+  - `/register` — 사용자 셀프 가입 (permitAll)
+  - `/unlock` — 사용자 로그인
+  - `/vault/login` — 관리자 로그인 (사용자 reset/delete 용)
