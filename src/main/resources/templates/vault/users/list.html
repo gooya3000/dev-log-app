@@ -10,10 +10,9 @@
 <nav th:replace="~{layout :: nav}"></nav>
 
 <h1>사용자 관리</h1>
-<a th:href="@{/vault/users/new}"><button>새 사용자 생성</button></a>
 
 <div th:if="${#lists.isEmpty(users)}" style="margin-top:1rem; color:#666;">
-    등록된 사용자가 없습니다.
+    등록된 사용자가 없습니다. 사용자는 <a th:href="@{/register}">/register</a> 페이지에서 가입합니다.
 </div>
 
 <table th:if="${!#lists.isEmpty(users)}" style="width:100%; border-collapse:collapse; margin-top:1rem;">

@@ -75,7 +75,7 @@ public class SecurityConfig {
         http
             .authenticationProvider(userAuthenticationProvider)
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/unlock", "/css/**", "/js/**", "/images/**").permitAll()
+                .requestMatchers("/unlock", "/register", "/css/**", "/js/**", "/images/**").permitAll()
                 .requestMatchers("/logs/**", "/").hasRole("USER")
                 .anyRequest().authenticated()
             )

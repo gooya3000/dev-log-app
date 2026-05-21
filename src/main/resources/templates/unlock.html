@@ -11,6 +11,10 @@
 
 <h1>로그인</h1>
 
+<div th:if="${param.registered}" class="info">
+    가입이 완료되었습니다. 로그인하세요.
+</div>
+
 <div th:if="${param.error}" class="error">
     로그인 실패. Passphrase를 확인하세요.
 </div>

@@ -19,13 +19,19 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 | 4 | E2E 수동 검수 | — | 🟡 일부 (구버전 모델 기준 — R-3 후 재실행 필요) |
 | **R-PLAN** | PLAN.md vault 모델 전환 (공유 DEK → 사용자별 DEK + admin wrap) | `436d826` | ✅ |
 | **R-1** | vault 모델 재구축 (도메인·vault·storage·service·security) | `a07f614` | ✅ |
-| **R-2** | 웹 화면 재구축 (`/register` 추가, `/vault/users/new` 제거) | — | ⏳ **다음 작업** |
-| **R-3** | code-reviewer + 메인 E2E 점검 | — | ⏳ |
+| **R-2** | 웹 화면 재구축 (`/register` 추가, `/vault/users/new` 제거) | (이번 커밋) | ✅ |
+| **R-3** | code-reviewer + 메인 E2E 점검 | — | ⏳ **다음 작업** |
 
 ---
 
 ## 최근 결정 / 변경
 
+- **2026-05-21 — Phase R-2 완료** (이번 커밋). `spring-backend` 위임으로 웹 화면 재구축.
+  - 신규: `web/RegisterController`, `web/form/UserRegisterForm`, `templates/register.html`, `test/RegisterControllerTest` (5 케이스).
+  - 수정: `SecurityConfig` `/register` permitAll, `unlock.html` `?registered` 안내, `vault/users/list.html` 생성 버튼 제거.
+  - 제거: `UserCreateForm`, `vault/users/form.html`, `vault/users/created.html`.
+  - `./gradlew test` 95개 통과 / 0 실패 (R-1 의 90개 + 새 5개).
+  - 판단 메모: ① `IllegalArgumentException` 은 200 + 폼 재렌더 + 일반화 메시지("가입할 수 없습니다.") 로 처리 — userId 존재 여부 누출 차단(PLAN §5.6). ② ⑤번 ROLE_USER 차단 케이스는 `SecurityAccessTest.roleUser_cannot_access_vaultUsers` 에 이미 존재해 중복 추가 생략.
 - **2026-05-21 — Phase R-1 완료** (`a07f614`). `spring-backend` 위임으로 vault 모델 재구축.
   - 도메인·service·storage·security 17개 파일 변경/신규. `./gradlew test` 90개 통과 / 0 실패.
   - PLAN.md §6.2 R-1 의 9가지 Done 기준 (bootstrap·두 wrap 사본·login round-trip·reset 시 DEK 동일·사용자 격리·adminWrappedDek 변조 탐지 등) 모두 커버.
@@ -46,14 +52,10 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 
 ## 다음 액션
 
-1. **Phase R-2 (웹 화면 재구축)** — `spring-backend` 위임. PLAN.md §6.2 R-2 행 그대로.
-   - 신규: `web/RegisterController`, `web/form/UserRegisterForm`, `templates/register.html`.
-   - 수정: `web/AdminUserController` (생성 액션 제거), `templates/vault/users/list.html`, `templates/unlock.html` (?registered 안내), `security/SecurityConfig` (/register permitAll).
-   - 제거: `web/form/UserCreateForm`, `templates/vault/users/form.html`, `templates/vault/users/created.html`.
-2. **Phase R-3 (통합 점검)** — `code-reviewer` 리포트 + 메인 세션 `bootRun` E2E.
+1. **Phase R-3 (통합 점검)** — `code-reviewer` 로 R-1 + R-2 묶음 diff 리뷰 (PLAN.md §6.2 R-3 행, §4.5/§5 정책 대비). 그 다음 메인 세션 `bootRun` 으로 브라우저 E2E.
    - E2E 시나리오: 가입 → 로그인 → 회고 작성 → 로그아웃 → admin reset → 새 임시 passphrase 로 재로그인 (회고 그대로 보임) → admin 사용자 삭제 (디렉토리 사라짐).
-3. **Vault 재셋업** — R-3 통과 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase 20자+ 랜덤 또는 4단어+) → 회고 1~2건 작성 → `data/` 커밋·푸시.
-4. **Phase 4 체크리스트 명문화** — PLAN §6.2 의 "수동 체크리스트" 를 실제 항목으로 채우기.
+2. **Vault 재셋업** — R-3 통과 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase 20자+ 랜덤 또는 4단어+) → 회고 1~2건 작성 → `data/` 커밋·푸시.
+3. **Phase 4 체크리스트 명문화** — PLAN §6.2 의 "수동 체크리스트" 를 실제 항목으로 채우기.
 
 ---
 
