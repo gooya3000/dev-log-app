@@ -19,7 +19,7 @@
 | 사용자 passphrase 재설정 | 관리자 모드에서 `/vault/users/{id}/reset-passphrase` → `adminWrappedDek` 로 `DEK_user` 회수 → 새 passphrase 로 `userWrappedDek` 만 재발급. `DEK_user` 그대로 (§4.5.6) |
 | 사용자 삭제 | 관리자 모드에서 `users[]` 엔트리 + `data/logs/{userId}/` 디렉토리 일괄 제거 |
 | 회고 작성 | 폼에서 날짜·제목·본문 항목들을 입력 → 평문 JSON 직렬화 → AES-256-GCM 암호화 → 파일 1개로 저장 |
-| 회고 목록 | 날짜 내림차순, 제목·태그·요약 노출. 매 페이지 로드 시 메모리 마스터키로 전체 복호화 후 in-memory 정렬·필터 |
+| 회고 목록 | 날짜 내림차순, 제목·태그·요약 노출. 로그인 세션의 `DEK_user` 로 본인 디렉토리(`data/logs/{userId}/`) 파일만 복호화 후 in-memory 정렬·필터 |
 | 회고 상세 | 파일 1개 복호화 → 렌더링 |
 | 회고 수정 | 동일 파일 덮어쓰기, `updatedAt` 갱신. 새 nonce로 재암호화 |
 | 회고 삭제 | 파일 단위 삭제 (휴지통 X) |
@@ -543,10 +543,10 @@ admin passphrase                              user passphrase
 
 사용자 로그인 passphrase 는 §5.1~5.3 stateless 원칙을 그대로 따른다.
 
-- 폼으로만 받음 (`POST /unlock`, `POST /vault/users` 초기 발급 시, `POST /vault/users/{id}/reset-passphrase` 재설정 시).
+- 폼으로만 받음 (`POST /unlock`, `POST /register` 셀프 가입 시, `POST /vault/users/{id}/reset-passphrase` 재설정 시).
 - 컨트롤러 → 서비스 → `PassphraseKdf` 까지 메서드 인자(`String passphrase`)로만 흐름.
 - PBKDF2 출력 64바이트는 `K_user` (전반 32, wrap용) + `H_user` (후반 32, 인증용) 로 분리해서 **둘 다 사용 후 즉시 폐기**. 메모리에 남는 것은 DEK 만.
-- `UserUnlockForm` / `UserCreateForm` / `ResetPassphraseForm` 의 `passphrase` 필드는 `@ToString.Exclude` 필수.
+- `UserUnlockForm` / `UserRegisterForm` / `ResetPassphraseForm` 의 `passphrase` 필드는 `@ToString.Exclude` 필수.
 - 로그·예외 메시지에 passphrase · K_user · H_user · DEK 노출 금지.
 - 잘못된 passphrase 응답은 일정 시간 (~500ms) 인위적 지연 + 일반화 메시지("로그인 실패")로 타이밍/존재 여부 누출 완화.
 - **세션 만료 없음** (결정사항): unlock 후 앱 종료까지 DEK 메모리 유지. 사용자가 명시적 `POST /logout` 시 즉시 해제.
@@ -669,7 +669,7 @@ Phase 0~3 (구버전 — 공유 DEK 모델) 는 모두 머지된 상태. 사용�
 | `spring-backend` | sonnet | 풀권한 | Phase 1 (도메인+저장소), Phase 2-A (웹 CRUD) |
 | `ai-integration` | sonnet | 풀권한 | Phase 2-B (AI 어댑터) — §5 키 정책을 시스템 프롬프트에 박아둠 |
 | `test-engineer` | haiku | 풀권한 (단, 프로덕션 코드 수정 금지를 본문 규칙으로) | Phase 2-C, 그리고 다른 Phase의 테스트 보강 |
-| `code-reviewer` | opus | **읽기 전용** (Edit/Write 없음) | 각 Phase 마무리 시점, Phase 3 통합 직후 (main 직푸시 워크플로우라 "머지 전" 트리거는 없음 — 단계 종료마다 한 번씩) |
+| `code-reviewer` | opus | **읽기 전용** (Edit/Write 없음) | 각 Phase 작업 종료 직후, 커밋·푸시 직전 (Phase 3 / R-시리즈 묶음 통합 시 동일). main 직푸시 워크플로우라 "머지 전" 트리거는 없음 — 단계 종료마다 한 번씩 |
 
 빌트인 에이전트는 보조 용도로:
 - 코드 탐색·"어디 정의돼 있나?" 류 → `Explore`
@@ -677,14 +677,23 @@ Phase 0~3 (구버전 — 공유 DEK 모델) 는 모두 머지된 상태. 사용�
 - 그 외 범용 한 번짜리 → `general-purpose`
 - 보안/취약점 점검 (후반) → `/security-review` 스킬
 
+### 6.5 메타 에이전트 (코드 흐름 외)
+
+§6.4 의 4개는 모두 코드 작업용. 별도로 **지시 문서(`*.md`) 자체의 정합성을 점검하는 메타 에이전트** 1개를 더 두었다.
+
+| 에이전트 | 모델 | 권한 | 어디에 쓰나 |
+|---|---|---|---|
+| `instruction-auditor` | opus | **읽기 전용** (Read/Grep/Glob 만 — 코드도 안 봄) | CLAUDE.md / docs/*.md / .claude/agents/*.md 간 모순·모호성·중복·역할 혼재 점검. **사용자가 직접 호출** — Phase 트리거가 아님. 모델 전환 같은 큰 결정 직후나 지시 문서 다발 변경 직후 한 번씩 |
+
+§6.4 와 분리한 이유: 코드 작업 흐름(Phase 진행)에 끼지 않고, 트리거가 시간이 아니라 사용자 호출. 같은 표에 두면 "이 에이전트도 Phase 마무리에 부르는 건가?" 로 오해할 여지가 있어 분리한다.
+
 ---
 
 ## 7. 다음 액션 (제안)
 
-1. ~~본 문서 §1~§5 컨펌~~ ✓
-2. ~~**Phase 0~3** (공유 DEK 모델 기반 1차 구현)~~ ✓
-3. **모델 전환 결정** ✓ — 셀프 가입 + 사용자별 DEK + admin 마스터키 wrap. PLAN.md §4.5 전면 재작성 완료.
-4. **Phase R-1 (vault 모델 재구축)** — `spring-backend` 위임. §6.2 R-1 행 그대로. 가장 큰 변경이라 단계 마무리에 `code-reviewer` 한 번.
-5. **Phase R-2 (웹 화면 재구축)** — `spring-backend` 위임. R-1 완료 후. `/register` 추가 + `/vault/users/new` 제거 + 템플릿 정리.
-6. **Phase R-3 (통합 점검)** — `code-reviewer` 리포트 + 메인 세션 `bootRun` 브라우저 E2E 점검. 가입 → 로그인 → 회고 → admin reset → 재로그인 까지.
-7. (이후) Phase 4 본래 계획대로 — README 갱신 + 수동 검수 체크리스트 정리.
+> 진행 상태의 디테일(어디까지 했는지)은 `docs/HANDOFF.md` 가 단일 출처. 본 절은 PLAN 차원의 큰 단계 흐름만.
+
+1. **Phase R-1 (vault 모델 재구축)** — `spring-backend` 위임. §6.2 R-1 행 그대로. 가장 큰 변경이라 단계 마무리에 `code-reviewer` 한 번.
+2. **Phase R-2 (웹 화면 재구축)** — `spring-backend` 위임. R-1 완료 후. `/register` 추가 + `/vault/users/new` 제거 + 템플릿 정리.
+3. **Phase R-3 (통합 점검)** — `code-reviewer` 리포트 + 메인 세션 `bootRun` 브라우저 E2E 점검. 가입 → 로그인 → 회고 → admin reset → 재로그인 까지.
+4. (이후) Phase 4 본래 계획대로 — README 갱신 + 수동 검수 체크리스트 정리.

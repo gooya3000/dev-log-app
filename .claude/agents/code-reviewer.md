@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: 변경 사항을 PLAN.md / CLAUDE.md / 보안 정책에 대조해 리뷰만 수행한다. 코드 수정 권한 없음 — 리포트만 반환. 각 Phase 머지 직전, 그리고 Phase 3 통합 전에 사용.
+description: 변경 사항을 PLAN.md / CLAUDE.md / 보안 정책에 대조해 리뷰만 수행한다. 코드 수정 권한 없음 — 리포트만 반환. main 직푸시 워크플로우라 "머지 전" 트리거는 없음. 각 Phase 작업 종료 직후, 커밋·푸시 직전에 사용 (Phase 3 / R-시리즈 묶음 통합 시 동일).
 tools: Read, Grep, Glob, Bash
 model: opus
 ---
@@ -18,10 +18,12 @@ model: opus
 
 ### A. 보안 (가장 중요)
 - [ ] `application.properties`에 API 키 관련 항목이 새로 들어가지 않았는가? (env placeholder 포함)
-- [ ] 새로 추가된 DTO/Form 중 `apiKey` 필드가 있다면 `@ToString.Exclude`가 붙어 있는가?
-- [ ] AI 어댑터에 `apiKey` 필드/static 캐시가 없는가?
-- [ ] 로그·예외 메시지에 키가 흘러나갈 경로가 있는가?
-- [ ] `.gitignore`에서 빠진 시크릿 관련 경로가 있는가?
+- [ ] 새로 추가된 DTO/Form 의 시크릿 필드(`apiKey`, `passphrase`, `passphraseConfirm`)에 `@ToString.Exclude` 가 붙어 있는가?
+- [ ] AI 어댑터·도메인 서비스에 `apiKey`·`passphrase`·`K_user`·`H_user` 필드/static 캐시가 없는가? (DEK 는 Vault 빈에만 존재 허용)
+- [ ] 로그·예외 메시지·toString 에 apiKey · passphrase · K_user · H_user · DEK 가 흘러나갈 경로가 있는가?
+- [ ] 화면·예외 경로에서 `adminWrappedDek` · `userWrappedDek` · `passphraseHash` 가 응답·템플릿·로그에 노출되지 않는가?
+- [ ] 잘못된 passphrase 경로가 일정 시간(~500ms) 지연 + 일반화 메시지 원칙(§5.6)을 지키는가?
+- [ ] `.gitignore`에서 빠진 시크릿 관련 경로가 있는가? (`data/` 는 제외 — ciphertext)
 
 ### B. PLAN.md 정합성
 - [ ] 변경이 PLAN.md §3 패키지 구조를 따르는가?
@@ -37,7 +39,7 @@ model: opus
 ### D. 미충족/리스크
 - PLAN.md에 있는데 누락된 항목
 - "나중에 고치겠다"로 남긴 TODO/FIXME
-- 학습용 프로젝트이지만 [[project-devlog-public-repo]] 공개 리포라는 점을 위협하는 변경
+- 학습용 프로젝트이지만 GitHub 공개 리포라는 점을 위협하는 변경 (시크릿 노출, 평문 회고 디스크 기록 등)
 
 ## 출력 형식
 

@@ -15,15 +15,12 @@
 
 ## 절대 지킬 것 (보안)
 
-- `application.properties` (committed) 에 **시크릿 절대 금지** — API 키·user passphrase·admin passphrase 모두. 환경변수 placeholder(`${ANTHROPIC_API_KEY:}`)도 안 씀.
-- **Admin passphrase 만 예외적으로 평문 보관** — `application-local.properties` (gitignored)에 하드코딩. 그 외 모든 시크릿은 stateless 폼 처리 (§5.6, §5.7).
-- 시크릿을 담는 DTO 필드(`apiKey`, `passphrase`)는 `@ToString.Exclude` 필수. `AdminProperties` 빈도 동일.
-- **회고 평문이 디스크에 떨어지면 안 된다.** 모든 저장은 `VaultCipher` 통과 → AES-256-GCM ciphertext 만 기록. 평문은 메모리에만.
+세부 규칙은 `docs/PLAN.md` §5 단일 출처. 아래는 코드 짤 때 단 1초도 잊으면 안 되는 핀카드.
+
+- **시크릿 제로 커밋**: API 키·user passphrase 는 폼으로만 받아 메서드 인자로만 흐르게 한다 (DTO `@ToString.Exclude` 필수). admin passphrase 만 `application-local.properties` 평문, 그 외 모든 시크릿은 stateless. 회고 평문은 디스크에 닿지 않는다 — `VaultCipher` 통과 AES-256-GCM ciphertext 만 기록.
 - **DEK 래핑 구조 유지**: 파일은 DEK 로 암호화, DEK 는 admin 키 / 각 user 키로 별도 wrap. DEK 가 평문 디스크에 노출되는 경로를 만들지 말 것.
 - **권한 분리 유지**: Spring Security 로 `/vault/**` = ROLE_ADMIN, `/logs/**` = ROLE_USER. 한 컨트롤러가 두 권한 다 다루지 말 것.
-- `.env`, `application-local.properties`, `.claude/settings.local.json` 는 `.gitignore`. **주의**: `data/` 는 ignore 대상 아님 — ciphertext 형태로 리포에 커밋된다.
-- `.env`, `application-local.properties`, `.claude/settings.local.json`는 `.gitignore`.
-- **주의**: `data/`는 ignore 대상이 아니다. ciphertext 형태로 리포에 커밋된다.
+- **`.gitignore` 단일 출처**: PLAN.md §5.4. **주의**: `data/` 는 ignore 대상 아님 — ciphertext 형태로 리포에 커밋된다.
 
 ## 기술 스택
 
@@ -56,18 +53,22 @@
 
 ## 서브에이전트 작업 시
 
-이 리포는 `.claude/agents/`에 **커스텀 에이전트 4개**를 정의해 두었다. Phase별 매핑은 PLAN.md §6.4 표 참조.
+이 리포는 `.claude/agents/`에 **코드 작업용 4개 + 메타 1개**의 커스텀 에이전트를 정의해 두었다. Phase별 매핑은 PLAN.md §6.4 표 (코드용) / §6.5 (메타) 참조.
 
+코드 작업용 (PLAN.md §6.4):
 - `spring-backend` (sonnet, 풀권한) — Phase 1, 2-A
 - `ai-integration` (sonnet, 풀권한) — Phase 2-B. 시스템 프롬프트에 §5 키 정책이 박혀 있음
 - `test-engineer` (haiku, 프로덕션 코드 수정 금지 규칙) — Phase 2-C, 테스트 보강
-- `code-reviewer` (opus, **읽기 전용**) — 단계 마무리 시점 통합 리뷰. main 직푸시 워크플로우라 "머지 전" 트리거는 없음. Edit/Write 도구 없음
+- `code-reviewer` (opus, **읽기 전용**) — 각 Phase 작업 종료 직후, 커밋·푸시 직전 통합 리뷰. Edit/Write 도구 없음
+
+메타 (PLAN.md §6.5):
+- `instruction-auditor` (opus, **읽기 전용**, Read/Grep/Glob 만) — 지시 문서(`*.md`, `.claude/agents/*`) 자체의 모순·모호성·중복·역할 혼재 점검. 코드는 안 봄. 사용자가 직접 호출하며 판단 모호 시 메인 세션에 확인 질문을 던지는 형태
 
 위임 시 규칙:
 - 브리핑에 **PLAN.md의 어느 절/Phase인지** 항상 명시.
 - "이해를 위임하지 않는다." 구체적인 파일/시그니처/통과시켜야 할 테스트로 좁혀서 위임.
 - Phase 1(도메인+저장소)이 후속 작업의 계약이라 단독으로 먼저 끝낸다. Phase 2-A/2-B/2-C는 병렬.
-- 서브에이전트의 "완료했습니다"는 의도일 뿐. 메인 세션이 diff·테스트로 직접 확인. 단계 마무리 시점엔 `code-reviewer` 한 번 더 돌릴 것.
+- 서브에이전트의 "완료했습니다"는 의도일 뿐. 메인 세션이 diff·테스트로 직접 확인. 각 Phase 작업 종료 직후, 커밋·푸시 직전 `code-reviewer` 한 번 더 돌릴 것.
 
 ## 커뮤니케이션
 
