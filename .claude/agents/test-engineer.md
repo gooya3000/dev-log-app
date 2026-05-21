@@ -21,7 +21,7 @@ model: haiku
 - **결정론**: `LocalDateTime.now()`, 랜덤, 외부 네트워크 직접 호출 금지. 시계는 `Clock` 주입 or 고정값, 랜덤은 시드 고정.
 - **외부 의존 0**: DB 없음(원래 없음), 실제 HTTP 호출 없음. WireMock/fake 사용.
 - **임시 디렉토리**: 파일 시스템 테스트는 `@TempDir` 사용. 리포 안 `data/`에 쓰지 말 것.
-- **실제 API 키 사용 금지.** AI 어댑터 테스트는 항상 fake 키 (`"sk-test-fake"` 같은 명백히 가짜인 값).
+- **실제 API 키 사용 금지.** AI 어댑터 테스트는 항상 fake 키 (`"fake-api-key"` 같은 명백히 가짜인 값 — 공급자 접두어 흉내 금지).
 
 ## 테스트 종류별 가이드
 - **저장소 단위 테스트**: `@TempDir`로 root 디렉토리 주입, save/findAll/findById/update/delete round-trip.

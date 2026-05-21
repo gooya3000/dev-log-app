@@ -100,8 +100,6 @@ src/main/resources/templates/
 └── error.html
 ```
 
-> **제거됨** (셀프 가입 모델로 전환): `vault/users/form.html` (관리자가 사용자 생성하는 폼), `vault/users/created.html` (관리자가 본 초기 passphrase).
-
 > **Thymeleaf-Spring Security 통합**: `layout.html` 헤더에 `<div sec:authorize="hasRole('USER')">`, `<div sec:authorize="hasRole('ADMIN')">` 식으로 권한별 메뉴 노출. `thymeleaf-extras-springsecurity6` 의존성 포함.
 
 ---
@@ -120,10 +118,8 @@ com.example.devlogapp
 │   └── AdminProperties          // @ConfigurationProperties("devlog.admin") — passphrase, @ToString.Exclude
 │
 ├── security                     // Spring Security 통합 (§5.7)
-│   ├── SecurityConfig           // SecurityFilterChain — /vault/** = ADMIN, /logs/** = USER
-│   │                            //   Phase 1: 단일 FilterChain + admin formLogin 만 구성 (임시)
-│   │                            //   Phase 2-A TODO: ① admin/user 두 FilterChain 분리,
-│   │                            //                   ② /unlock CSRF ignoring 제거 (Thymeleaf _csrf 토큰)
+│   ├── SecurityConfig           // 두 FilterChain — adminSecurityFilterChain @Order(1) /vault/** = ADMIN,
+│   │                            //   userSecurityFilterChain @Order(2) /logs/** = USER. CSRF 활성.
 │   ├── AdminAuthenticationProvider  // admin passphrase 검증 + adminWrappedDek sanity unwrap
 │   ├── UserAuthenticationProvider   // user passphrase 검증 + DEK unwrap → Vault 적재
 │   └── CurrentSession           // 현재 세션의 권한·userId 컨텍스트 헬퍼
@@ -331,7 +327,7 @@ admin passphrase                              user passphrase
 ```
 
 - `adminSalt` 는 top-level — admin passphrase 에서 `K_admin` 을 도출할 때 쓰는 단일 salt. 사용자마다 다르지 않음 (admin passphrase 가 1개니까).
-- `users[]` 의 각 엔트리는 **자기 sault, 자기 hash, 자기 DEK_user 의 두 wrap 사본**을 들고 있음.
+- `users[]` 의 각 엔트리는 **자기 salt, 자기 hash, 자기 DEK_user 의 두 wrap 사본**을 들고 있음.
 - userId 는 `users[]` 내에서 unique. 가입 시 중복 검사.
 
 **`data/logs/{userId}/{date}_{id}.json`** (회고 envelope):
@@ -388,7 +384,6 @@ admin passphrase                              user passphrase
   4. data/logs/ 루트 디렉토리 생성 (없으면)
   → 부팅 완료. users 가 비어 있어 admin login 또는 /register 만 가능.
 ```
-> **이전 모델과 차이**: bootstrap 단계에서 DEK 를 만들지 않는다. DEK_user 는 사용자가 가입할 때 사용자별로 발급된다.
 
 **관리자 로그인** (`POST /vault/login`):
 ```
@@ -441,7 +436,7 @@ admin passphrase                              user passphrase
   2. users[] 에서 대상 userId 엔트리 조회 (없으면 404)
   3. K_admin = PBKDF2(adminPassphrase, adminSalt, 600_000, 32)
   4. 해당 사용자의 adminWrappedDek unwrap → DEK_user 회수
-  5. 새 임시 passphrase 결정 (admin 입력 또는 시스템 random 16자)
+  5. 새 임시 passphrase = SecureRandom 16자 (admin 직접 입력 경로 없음)
   6. newUserSalt = SecureRandom.nextBytes(16)
   7. newDerivation = PBKDF2(새 passphrase, newUserSalt, 600_000, 64)
   8. newUserWrappedDek = AES-GCM(DEK_user, newDerivation[0..32], newNonce)
@@ -521,7 +516,8 @@ admin passphrase                              user passphrase
 3. 첫 부팅 시 시스템이 `adminSalt` 발급 후 `.vault-meta.json` 생성
 
 **사용자 가입 (각자):**
-1. `/register` 에서 userId + passphrase 입력 → 가입 완료
+1. `/register` 에서 userId + 강한 passphrase 입력 → 가입 완료
+   - **passphrase 강도 기준**: 20자+ 랜덤 또는 4단어+ diceware. 공개 리포 + PBKDF2 600k iters 라 약하면 오프라인 brute-force 위험.
 2. 시스템이 자동으로 `DEK_user` 발급 + 사용자/admin 두 사본 wrap 해서 저장
 3. 가입 직후 `/unlock` 에서 본인 passphrase 로 로그인
 
