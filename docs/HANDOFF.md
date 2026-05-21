@@ -65,6 +65,7 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 - **Admin passphrase** 는 `application-local.properties` 평문 보관 (PLAN §5.7). 이 파일은 `.gitignore` — 절대 커밋 금지. `application-local.properties.example` 만 리포에 둠. admin 분실 시 reset 기능 영구 상실 + 신규 가입 시 `adminWrappedDek` 발급 불가 → 신규 가입 사실상 막힘.
 - **Gemini 호출 본문은 Google 서버에 일정 기간 잔존 가능** (무료 티어는 모델 개선 용도 활용 명시). 회고에 민감 정보 넣을 때 유의.
 - **DEK_user 는 메모리에만**. 디스크엔 wrap 된 형태로만 (사용자/admin 두 사본). 어떤 경로로도 평문 DEK 가 파일에 떨어지면 설계 위반.
+- **`data/` 는 `.gitignore` 가 아니다.** AES-256-GCM ciphertext 형태로 공개 리포에 그대로 커밋된다 (PLAN §5.4). 평문 회고가 디스크에 닿지 않는 것이 이 invariant 의 전제 — `VaultCipher` 우회로가 생기면 즉시 설계 위반.
 
 ---
 
