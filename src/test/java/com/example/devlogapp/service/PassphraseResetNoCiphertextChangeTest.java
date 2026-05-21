@@ -15,8 +15,6 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.time.OffsetDateTime;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -25,64 +23,68 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * ⑤ passphrase reset 전후 DEK 동일 검증
- * ⑥ user passphrase 회전 시 회고 파일 재암호화 없음 — ciphertext 비트 단위로 동일
+ * ④ passphrase reset 전후 DEK 동일 + 회고 파일 재암호화 없음 (ciphertext 비트 단위로 동일)
  */
 class PassphraseResetNoCiphertextChangeTest {
 
     private static final String ADMIN_PASSPHRASE = "test-admin-pass-reset";
-    private static final String USER_ID = "self";
+    private static final String USER_ID = "alice";
     private static final String OLD_PASSPHRASE = "old-user-pass";
     private static final String NEW_PASSPHRASE = "new-user-pass-2024";
 
     private final ObjectMapper objectMapper = new JacksonConfig().objectMapper();
     private VaultMetaRepository vaultMetaRepository;
     private UserAdminService userAdminService;
+    private UserRegistrationService userRegistrationService;
     private UserAuthService userAuthService;
     private Vault vault;
-    private Path logsDir;
+    private Path logsRoot;
+    private Path userLogsDir;
 
     @BeforeEach
     void setup(@TempDir Path tempDir) throws IOException {
         AdminProperties adminProperties = new AdminProperties();
         adminProperties.setPassphrase(ADMIN_PASSPHRASE);
 
-        logsDir = tempDir.resolve("logs");
-        Files.createDirectories(logsDir);
+        logsRoot = tempDir.resolve("logs");
+        Files.createDirectories(logsRoot);
 
         vaultMetaRepository = new VaultMetaRepository(objectMapper, tempDir);
         vault = new Vault();
 
-        VaultBootstrapService bootstrap = new VaultBootstrapService(adminProperties, vaultMetaRepository);
+        VaultBootstrapService bootstrap = new VaultBootstrapService(adminProperties, vaultMetaRepository, logsRoot);
         bootstrap.bootstrap();
 
-        userAdminService = new UserAdminService(adminProperties, vaultMetaRepository);
-        userAdminService.createUser(USER_ID, OLD_PASSPHRASE);
+        userRegistrationService = new UserRegistrationService(adminProperties, vaultMetaRepository, logsRoot);
+        userRegistrationService.register(USER_ID, OLD_PASSPHRASE);
+        userLogsDir = logsRoot.resolve(USER_ID);
+
+        userAdminService = new UserAdminService(adminProperties, vaultMetaRepository, logsRoot);
         userAuthService = new UserAuthService(vaultMetaRepository, vault);
     }
 
     @Test
     void resetPassphrase_logFileCiphertextUnchanged() throws IOException {
-        // ⑥ passphrase 회전 전 회고 파일 저장
+        // 회고 파일 저장
         userAuthService.unlock(USER_ID, OLD_PASSPHRASE);
 
-        JsonDevLogRepository repo = new JsonDevLogRepository(objectMapper, vault, logsDir);
+        JsonDevLogRepository repo = new JsonDevLogRepository(objectMapper, vault, logsRoot);
         DevLogService logService = new DevLogService(repo);
 
         logService.create("2026-05-18", "테스트 회고", List.of("test"),
                 "했습니다", "배웠습니다", "막혔습니다", "내일할일", Mood.GOOD);
 
         // 파일 내용 캡처 (before)
-        Map<String, byte[]> before = captureFiles(logsDir);
+        Map<String, byte[]> before = captureFiles(userLogsDir);
         vault.lock();
 
         // passphrase 재설정
         userAdminService.resetPassphrase(USER_ID, NEW_PASSPHRASE);
 
         // 파일 내용 캡처 (after)
-        Map<String, byte[]> after = captureFiles(logsDir);
+        Map<String, byte[]> after = captureFiles(userLogsDir);
 
-        // ⑥ 파일 이름/내용 비트 단위로 동일
+        // 파일 이름/내용 비트 단위로 동일 — 회고 재암호화 없음
         assertThat(after.keySet()).isEqualTo(before.keySet());
         for (String filename : before.keySet()) {
             assertThat(after.get(filename))

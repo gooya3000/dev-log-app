@@ -5,8 +5,8 @@ import com.example.devlogapp.config.JacksonConfig;
 import com.example.devlogapp.domain.DevLog;
 import com.example.devlogapp.domain.DevLogId;
 import com.example.devlogapp.domain.Mood;
-import com.example.devlogapp.service.UserAdminService;
 import com.example.devlogapp.service.UserAuthService;
+import com.example.devlogapp.service.UserRegistrationService;
 import com.example.devlogapp.service.VaultBootstrapService;
 import com.example.devlogapp.vault.Vault;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,43 +26,47 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * ⑩ JsonDevLogRepository 표준 CRUD 라운드트립
+ * JsonDevLogRepository 표준 CRUD 라운드트립.
+ * 새 모델: data/logs/{userId}/ 서브디렉토리 기반.
  * save → load by id → list (날짜 내림차순) → update → delete
- * Vault unlock 상태에서 평문 DevLog ↔ ciphertext 파일 라운드트립
  */
 class JsonDevLogRepositoryTest {
 
     private static final String ADMIN_PASSPHRASE = "test-admin-pass-repo";
-    private static final String USER_ID = "self";
+    private static final String USER_ID = "alice";
     private static final String USER_PASSPHRASE = "user-pass-repo";
 
     private final ObjectMapper objectMapper = new JacksonConfig().objectMapper();
     private JsonDevLogRepository repository;
     private Vault vault;
-    private Path logsDir;
+    private Path logsRoot;
+    private Path userLogsDir;
 
     @BeforeEach
     void setup(@TempDir Path tempDir) throws IOException {
         AdminProperties adminProperties = new AdminProperties();
         adminProperties.setPassphrase(ADMIN_PASSPHRASE);
 
-        logsDir = tempDir.resolve("logs");
-        Files.createDirectories(logsDir);
+        logsRoot = tempDir.resolve("logs");
+        Files.createDirectories(logsRoot);
 
         VaultMetaRepository vaultMetaRepository = new VaultMetaRepository(objectMapper, tempDir);
         vault = new Vault();
 
-        // bootstrap + user 생성 + unlock
-        VaultBootstrapService bootstrap = new VaultBootstrapService(adminProperties, vaultMetaRepository);
+        // bootstrap + 가입 + unlock
+        VaultBootstrapService bootstrap = new VaultBootstrapService(adminProperties, vaultMetaRepository, logsRoot);
         bootstrap.bootstrap();
 
-        UserAdminService userAdminService = new UserAdminService(adminProperties, vaultMetaRepository);
-        userAdminService.createUser(USER_ID, USER_PASSPHRASE);
+        UserRegistrationService registration = new UserRegistrationService(adminProperties, vaultMetaRepository, logsRoot);
+        registration.register(USER_ID, USER_PASSPHRASE);
 
         UserAuthService userAuthService = new UserAuthService(vaultMetaRepository, vault);
         userAuthService.unlock(USER_ID, USER_PASSPHRASE);
 
-        repository = new JsonDevLogRepository(objectMapper, vault, logsDir);
+        userLogsDir = logsRoot.resolve(USER_ID);
+
+        // logsRoot 를 주입 — 내부에서 userId 기반 서브디렉토리 사용
+        repository = new JsonDevLogRepository(objectMapper, vault, logsRoot);
     }
 
     private DevLog sampleLog(String id, String date, String title) {
@@ -85,7 +89,6 @@ class JsonDevLogRepositoryTest {
 
     @Test
     void save_findById_roundtrip() {
-        // ⑩ save → load by id 라운드트립
         DevLog log = sampleLog("test-id-001", "2026-05-18", "첫 번째 회고");
         repository.save(log);
 
@@ -99,28 +102,33 @@ class JsonDevLogRepositoryTest {
 
     @Test
     void save_encryptedOnDisk() throws IOException {
-        // ⑩ 파일이 ciphertext (평문 JSON 아님) 로 저장됨
         DevLog log = sampleLog("enc-id-001", "2026-05-18", "암호화 테스트");
         repository.save(log);
 
-        // 파일 내용이 envelope JSON (v/alg/nonce/ct) 형태인지 확인
-        Path file = Files.list(logsDir)
+        // 파일이 사용자 서브디렉토리에 저장됨
+        Path file = Files.list(userLogsDir)
                 .filter(p -> p.getFileName().toString().contains("enc-id-001"))
                 .findFirst()
                 .orElseThrow();
 
         String raw = Files.readString(file);
-        // 평문 회고 내용이 파일에 없어야 함
         assertThat(raw).doesNotContain("암호화 테스트");
-        // envelope 구조 확인
         assertThat(raw).contains("\"alg\"");
         assertThat(raw).contains("\"nonce\"");
         assertThat(raw).contains("\"ct\"");
     }
 
     @Test
+    void save_storedInUserSubdirectory() throws IOException {
+        // 파일이 logsRoot/{userId}/ 안에 저장됨
+        repository.save(sampleLog("path-test-id", "2026-05-18", "경로 테스트"));
+        assertThat(Files.list(userLogsDir)
+                .filter(p -> p.getFileName().toString().contains("path-test-id"))
+                .count()).isEqualTo(1);
+    }
+
+    @Test
     void findAll_dateDescOrder() {
-        // ⑩ list 날짜 내림차순
         repository.save(sampleLog("id-a", "2026-05-16", "이전 회고"));
         repository.save(sampleLog("id-b", "2026-05-18", "최신 회고"));
         repository.save(sampleLog("id-c", "2026-05-17", "중간 회고"));
@@ -134,7 +142,6 @@ class JsonDevLogRepositoryTest {
 
     @Test
     void update_overwrites() {
-        // ⑩ update
         OffsetDateTime now = OffsetDateTime.now();
         DevLog original = sampleLog("update-id", "2026-05-18", "원래 제목");
         repository.save(original);
@@ -166,7 +173,6 @@ class JsonDevLogRepositoryTest {
 
     @Test
     void save_utf8_koreanAndEmoji_roundtrip() {
-        // UTF-8 본문(한글 + 이모지)이 ciphertext 라운드트립 후에도 정확히 복원되는지
         String body = "오늘은 🚀 새 기능을 배포했다. 이슈는 없었음 😅";
         OffsetDateTime now = OffsetDateTime.now();
         DevLog log = DevLog.builder()
@@ -195,7 +201,6 @@ class JsonDevLogRepositoryTest {
 
     @Test
     void findAll_sameDate_multipleEntriesCoexist() {
-        // {date}_{id}.json 규칙 덕분에 같은 날짜에 N건 저장해도 충돌 없음
         repository.save(sampleLog("dup-1", "2026-05-18", "오전 회고"));
         repository.save(sampleLog("dup-2", "2026-05-18", "오후 회고"));
         repository.save(sampleLog("dup-3", "2026-05-18", "저녁 회고"));
@@ -211,9 +216,8 @@ class JsonDevLogRepositoryTest {
 
     @Test
     void findAll_ignoresLeftoverTmpFiles() throws IOException {
-        // 크래시로 남은 .tmp 파일이 디렉토리에 있어도 findAll 결과에 안 섞임
         repository.save(sampleLog("real-id", "2026-05-18", "정상 회고"));
-        Files.writeString(logsDir.resolve("2026-05-18_orphan.json.tmp"), "garbage-not-an-envelope");
+        Files.writeString(userLogsDir.resolve("2026-05-18_orphan.json.tmp"), "garbage-not-an-envelope");
 
         List<DevLog> all = repository.findAll();
         assertThat(all).hasSize(1);
@@ -222,8 +226,7 @@ class JsonDevLogRepositoryTest {
 
     @Test
     void findById_corruptedEnvelope_throws() throws IOException {
-        // 손상된 envelope 파일을 읽으면 IllegalStateException — 조용한 데이터 손실 차단
-        Path corrupted = logsDir.resolve("2026-05-18_corrupt-id.json");
+        Path corrupted = userLogsDir.resolve("2026-05-18_corrupt-id.json");
         Files.writeString(corrupted, "{\"v\":1,\"alg\":\"AES-256-GCM\",\"nonce\":\"AAAA\",\"ct\":\"AAAA\"}",
                 StandardCharsets.UTF_8);
 
@@ -233,7 +236,6 @@ class JsonDevLogRepositoryTest {
 
     @Test
     void save_preservesSchemaVersionAndTimestamps() {
-        // schemaVersion + ISO-8601 offset timestamp 가 라운드트립 후에도 보존
         OffsetDateTime created = OffsetDateTime.of(2026, 5, 18, 10, 0, 0, 0, ZoneOffset.ofHours(9));
         OffsetDateTime updated = created.plusHours(2);
         DevLog log = DevLog.builder()

@@ -15,7 +15,7 @@ import java.util.Arrays;
 import java.util.Base64;
 
 /**
- * 사용자 로그인 서비스 — passphrase 검증 + DEK unwrap → Vault 적재.
+ * 사용자 로그인 서비스 — H_user 검증 + userWrappedDek unwrap → Vault 적재.
  * PLAN.md §4.5.6 사용자 로그인 흐름 참조.
  */
 @Service
@@ -32,7 +32,7 @@ public class UserAuthService {
     }
 
     /**
-     * passphrase 로 H_user 검증 → DEK unwrap → Vault 적재.
+     * H_user 검증 → DEK unwrap → Vault 적재.
      * @param userId     사용자 ID
      * @param passphrase 입력 passphrase
      * @throws IllegalArgumentException 사용자 없음 또는 passphrase 불일치
@@ -63,8 +63,9 @@ public class UserAuthService {
 
         byte[] dek = null;
         try {
-            User.WrappedDek wd = user.getWrappedDek();
-            dek = KeyWrapper.unwrap(kUser, wd.getNonce(), wd.getCt());
+            // userWrappedDek 로 DEK unwrap
+            User.WrappedDek uwd = user.getUserWrappedDek();
+            dek = KeyWrapper.unwrap(kUser, uwd.getNonce(), uwd.getCt());
             vault.unlock(dek, userId);
             log.info("User unlocked: {}", userId);
         } catch (IllegalStateException e) {

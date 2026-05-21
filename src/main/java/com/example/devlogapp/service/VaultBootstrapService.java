@@ -1,24 +1,27 @@
 package com.example.devlogapp.service;
 
 import com.example.devlogapp.config.AdminProperties;
+import com.example.devlogapp.config.StorageProperties;
 import com.example.devlogapp.storage.VaultMetaRepository;
-import com.example.devlogapp.vault.KeyWrapper;
-import com.example.devlogapp.vault.PassphraseKdf;
 import com.example.devlogapp.vault.VaultMeta;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.stereotype.Service;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.SecureRandom;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 
 /**
- * 첫 부팅 시 .vault-meta.json 없으면 adminWrappedDek 초기화.
- * admin passphrase 누락/default 이면 fail-fast (예외 발생).
+ * 첫 부팅 시 .vault-meta.json 없으면 adminSalt 초기화 + data/logs/ 루트 생성.
+ * 새 모델: bootstrap 에서 DEK 만들지 않음 — DEK 는 사용자 가입 시 생성.
+ * admin passphrase 누락/default 이면 fail-fast.
  * PLAN.md §4.5.6 첫 부팅 자동 bootstrap 참조.
  */
 @Service
@@ -29,11 +32,32 @@ public class VaultBootstrapService implements ApplicationListener<ApplicationRea
 
     private final AdminProperties adminProperties;
     private final VaultMetaRepository vaultMetaRepository;
+    private final Path logsRoot;
 
+    @Autowired
+    public VaultBootstrapService(AdminProperties adminProperties,
+                                  VaultMetaRepository vaultMetaRepository,
+                                  StorageProperties storageProperties) {
+        this.adminProperties = adminProperties;
+        this.vaultMetaRepository = vaultMetaRepository;
+        this.logsRoot = Path.of(storageProperties.getRoot());
+    }
+
+    /** 테스트용 — logsRoot 직접 주입. */
+    public VaultBootstrapService(AdminProperties adminProperties,
+                                  VaultMetaRepository vaultMetaRepository,
+                                  Path logsRoot) {
+        this.adminProperties = adminProperties;
+        this.vaultMetaRepository = vaultMetaRepository;
+        this.logsRoot = logsRoot;
+    }
+
+    /** 테스트 호환용 — logsRoot 없이 (기존 테스트 시그니처 유지). metaRoot 기반으로 logsRoot 추정. */
     public VaultBootstrapService(AdminProperties adminProperties,
                                   VaultMetaRepository vaultMetaRepository) {
         this.adminProperties = adminProperties;
         this.vaultMetaRepository = vaultMetaRepository;
+        this.logsRoot = vaultMetaRepository.getMetaRoot().resolve("logs");
     }
 
     @Override
@@ -50,42 +74,32 @@ public class VaultBootstrapService implements ApplicationListener<ApplicationRea
 
         if (vaultMetaRepository.load().isPresent()) {
             log.info("Vault already initialized. Skipping bootstrap.");
+            ensureLogsRoot();
             return;
         }
 
         log.info("Vault not found. Initializing...");
 
-        byte[] dek = new byte[32];
         byte[] adminSalt = new byte[16];
-        byte[] kAdmin = null;
+        RANDOM.nextBytes(adminSalt);
 
+        VaultMeta meta = new VaultMeta(
+                1,
+                "PBKDF2-HMAC-SHA256",
+                600_000,
+                Base64.getEncoder().encodeToString(adminSalt),
+                List.of());
+
+        vaultMetaRepository.save(meta);
+        ensureLogsRoot();
+        log.info("Vault bootstrap complete. adminSalt generated, users: [].");
+    }
+
+    private void ensureLogsRoot() {
         try {
-            RANDOM.nextBytes(dek);
-            RANDOM.nextBytes(adminSalt);
-
-            kAdmin = PassphraseKdf.deriveAdmin(
-                    adminProperties.getPassphrase().toCharArray(), adminSalt);
-
-            KeyWrapper.WrapResult wrapped = KeyWrapper.wrap(kAdmin, dek);
-
-            VaultMeta.AdminWrappedDek adminWrappedDek = new VaultMeta.AdminWrappedDek(
-                    Base64.getEncoder().encodeToString(adminSalt),
-                    "AES-256-GCM",
-                    wrapped.nonceB64(),
-                    wrapped.ctB64());
-
-            VaultMeta meta = new VaultMeta(
-                    1,
-                    "PBKDF2-HMAC-SHA256",
-                    PassphraseKdf.KDF_ITERATIONS,
-                    adminWrappedDek,
-                    List.of());
-
-            vaultMetaRepository.save(meta);
-            log.info("Vault bootstrap complete.");
-        } finally {
-            Arrays.fill(dek, (byte) 0);
-            if (kAdmin != null) Arrays.fill(kAdmin, (byte) 0);
+            Files.createDirectories(logsRoot);
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to create logs root directory: " + logsRoot, e);
         }
     }
 

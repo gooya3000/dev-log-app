@@ -5,7 +5,6 @@ import com.example.devlogapp.service.UserAdminService;
 import com.example.devlogapp.vault.VaultMeta;
 import com.example.devlogapp.storage.VaultMetaRepository;
 import com.example.devlogapp.web.form.ResetPassphraseForm;
-import com.example.devlogapp.web.form.UserCreateForm;
 import jakarta.validation.Valid;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -21,8 +20,8 @@ import java.util.List;
 
 /**
  * 관리자 사용자 관리 컨트롤러.
+ * 새 모델: 사용자 생성(/new) 제거 — 셀프 가입은 /register (Phase R-2 에서 추가).
  * PLAN.md §2 /vault/users/** 매핑 참조.
- * 1회 노출 화면(created.html, reset-result.html)은 FlashAttribute 사용.
  */
 @Controller
 @RequestMapping("/vault/users")
@@ -45,37 +44,6 @@ public class AdminUserController {
                 .orElse(List.of());
         model.addAttribute("users", users);
         return "vault/users/list";
-    }
-
-    /** GET /vault/users/new — 사용자 생성 폼. */
-    @GetMapping("/new")
-    public String newForm(Model model) {
-        model.addAttribute("userCreateForm", new UserCreateForm());
-        return "vault/users/form";
-    }
-
-    /** POST /vault/users — 사용자 생성 → /vault/users/{id}/created (1회 노출). */
-    @PostMapping
-    public String create(@Valid @ModelAttribute UserCreateForm form, BindingResult bindingResult,
-                         Model model, RedirectAttributes redirectAttributes) {
-        if (bindingResult.hasErrors()) {
-            return "vault/users/form";
-        }
-        userAdminService.createUser(form.getUserId(), form.getPassphrase());
-        // 1회 노출: FlashAttribute 로 초기 passphrase 전달
-        redirectAttributes.addFlashAttribute("initialPassphrase", form.getPassphrase());
-        return "redirect:/vault/users/" + form.getUserId() + "/created";
-    }
-
-    /** GET /vault/users/{id}/created — 생성 직후 초기 passphrase 1회 표시. */
-    @GetMapping("/{id}/created")
-    public String created(@PathVariable String id, Model model) {
-        // FlashAttribute 가 없으면 (새로고침 등) 목록으로 리다이렉트
-        if (!model.containsAttribute("initialPassphrase")) {
-            return "redirect:/vault/users";
-        }
-        model.addAttribute("userId", id);
-        return "vault/users/created";
     }
 
     /** GET /vault/users/{id}/reset-passphrase — 재설정 확인 화면. */
@@ -114,7 +82,7 @@ public class AdminUserController {
         return "vault/users/reset-result";
     }
 
-    /** POST /vault/users/{id}/delete — 사용자 매핑 제거. */
+    /** POST /vault/users/{id}/delete — 사용자 매핑 + 디렉토리 제거. */
     @PostMapping("/{id}/delete")
     public String delete(@PathVariable String id) {
         userAdminService.deleteUser(id);

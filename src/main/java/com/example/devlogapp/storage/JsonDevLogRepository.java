@@ -6,6 +6,7 @@ import com.example.devlogapp.domain.DevLogId;
 import com.example.devlogapp.vault.EnvelopeV1;
 import com.example.devlogapp.vault.Vault;
 import com.example.devlogapp.vault.VaultCipher;
+import com.example.devlogapp.vault.VaultLockedException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,10 +24,11 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
- * JSON 파일 기반 회고 저장소.
+ * JSON 파일 기반 회고 저장소 — 사용자별 서브디렉토리.
+ * 파일 경로: data/logs/{userId}/{date}_{id}.json
  * 파일 내용은 항상 VaultCipher 통과 → ciphertext(EnvelopeV1)만 디스크에 기록.
- * atomic write: tmp → move.
- * PLAN.md §4.2, §4.3, §4.5 참조.
+ * Vault 에서 현재 userId 를 읽어 해당 사용자 디렉토리만 스캔.
+ * PLAN.md §4.1, §4.2, §4.3, §4.5 참조.
  */
 @Repository
 public class JsonDevLogRepository implements DevLogRepository {
@@ -35,7 +37,7 @@ public class JsonDevLogRepository implements DevLogRepository {
 
     private final ObjectMapper objectMapper;
     private final Vault vault;
-    private final Path logsDir;
+    private final Path logsRoot;  // data/logs/ (사용자 서브디렉토리의 부모)
 
     @Autowired
     public JsonDevLogRepository(ObjectMapper objectMapper,
@@ -43,23 +45,23 @@ public class JsonDevLogRepository implements DevLogRepository {
                                  StorageProperties storageProperties) {
         this.objectMapper = objectMapper;
         this.vault = vault;
-        this.logsDir = Path.of(storageProperties.getRoot());
+        this.logsRoot = Path.of(storageProperties.getRoot());
         try {
-            Files.createDirectories(logsDir);
+            Files.createDirectories(logsRoot);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to create logs directory: " + logsDir, e);
+            throw new IllegalStateException("Failed to create logs root directory: " + logsRoot, e);
         }
     }
 
-    /** 테스트용 — logsDir 직접 주입. */
-    public JsonDevLogRepository(ObjectMapper objectMapper, Vault vault, Path logsDir) {
+    /** 테스트용 — logsRoot 직접 주입. */
+    public JsonDevLogRepository(ObjectMapper objectMapper, Vault vault, Path logsRoot) {
         this.objectMapper = objectMapper;
         this.vault = vault;
-        this.logsDir = logsDir;
+        this.logsRoot = logsRoot;
         try {
-            Files.createDirectories(logsDir);
+            Files.createDirectories(logsRoot);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to create logs directory: " + logsDir, e);
+            throw new IllegalStateException("Failed to create logs root directory: " + logsRoot, e);
         }
     }
 
@@ -70,8 +72,11 @@ public class JsonDevLogRepository implements DevLogRepository {
             String plainJson = objectMapper.writeValueAsString(devLog);
             EnvelopeV1 envelope = VaultCipher.encrypt(plainJson, dek);
 
-            Path target = logsDir.resolve(filename(devLog));
-            Path tmp = logsDir.resolve(filename(devLog) + ".tmp");
+            Path userDir = userDir();
+            Files.createDirectories(userDir);
+
+            Path target = userDir.resolve(filename(devLog));
+            Path tmp = userDir.resolve(filename(devLog) + ".tmp");
             objectMapper.writeValue(tmp.toFile(), envelope);
             Files.move(tmp, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } catch (IOException e) {
@@ -84,19 +89,19 @@ public class JsonDevLogRepository implements DevLogRepository {
     @Override
     public Optional<DevLog> findById(DevLogId id) {
         String suffix = "_" + id.getValue() + ".json";
-        try (Stream<Path> stream = Files.list(logsDir)) {
+        try (Stream<Path> stream = Files.list(userDir())) {
             return stream
                     .filter(p -> p.getFileName().toString().endsWith(suffix))
                     .findFirst()
                     .map(this::decryptFile);
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to list logs directory", e);
+            throw new IllegalStateException("Failed to list user logs directory", e);
         }
     }
 
     @Override
     public List<DevLog> findAll() {
-        try (Stream<Path> stream = Files.list(logsDir)) {
+        try (Stream<Path> stream = Files.list(userDir())) {
             return stream
                     .filter(p -> p.getFileName().toString().endsWith(".json"))
                     .filter(p -> !p.getFileName().toString().endsWith(".tmp"))
@@ -105,14 +110,14 @@ public class JsonDevLogRepository implements DevLogRepository {
                     .map(this::decryptFile)
                     .toList();
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to list logs directory", e);
+            throw new IllegalStateException("Failed to list user logs directory", e);
         }
     }
 
     @Override
     public void deleteById(DevLogId id) {
         String suffix = "_" + id.getValue() + ".json";
-        try (Stream<Path> stream = Files.list(logsDir)) {
+        try (Stream<Path> stream = Files.list(userDir())) {
             stream
                     .filter(p -> p.getFileName().toString().endsWith(suffix))
                     .forEach(p -> {
@@ -123,7 +128,7 @@ public class JsonDevLogRepository implements DevLogRepository {
                         }
                     });
         } catch (IOException e) {
-            throw new IllegalStateException("Failed to list logs directory for delete", e);
+            throw new IllegalStateException("Failed to list user logs directory for delete", e);
         }
     }
 
@@ -138,6 +143,15 @@ public class JsonDevLogRepository implements DevLogRepository {
         } finally {
             Arrays.fill(dek, (byte) 0);
         }
+    }
+
+    /** 현재 unlock 사용자의 로그 디렉토리. Vault 가 locked 이면 VaultLockedException. */
+    private Path userDir() {
+        String userId = vault.getUserId();
+        if (userId == null) {
+            throw new VaultLockedException("Vault is locked. Cannot determine user directory.");
+        }
+        return logsRoot.resolve(userId);
     }
 
     /** 파일명: {date}_{id}.json */

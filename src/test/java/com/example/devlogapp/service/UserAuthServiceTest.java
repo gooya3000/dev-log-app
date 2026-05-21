@@ -9,46 +9,51 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
- * ④ UserAuthService.unlock 라운드트립 — 올바른 passphrase 로 H_user 검증 통과 → DEK unwrap → Vault 에 DEK 적재
+ * ③ UserAuthService.unlock 라운드트립 — H_user 검증 통과 → DEK unwrap → Vault 에 DEK 적재
  */
 class UserAuthServiceTest {
 
     private static final String ADMIN_PASSPHRASE = "test-admin-pass-auth";
-    private static final String USER_ID = "self";
+    private static final String USER_ID = "alice";
     private static final String USER_PASSPHRASE = "user-secret-passphrase";
 
     private final ObjectMapper objectMapper = new JacksonConfig().objectMapper();
     private VaultMetaRepository vaultMetaRepository;
-    private UserAdminService userAdminService;
+    private UserRegistrationService userRegistrationService;
     private UserAuthService userAuthService;
     private Vault vault;
 
     @BeforeEach
-    void setup(@TempDir Path tempDir) {
+    void setup(@TempDir Path tempDir) throws IOException {
         AdminProperties adminProperties = new AdminProperties();
         adminProperties.setPassphrase(ADMIN_PASSPHRASE);
+
+        Path logsRoot = tempDir.resolve("logs");
+        Files.createDirectories(logsRoot);
 
         vaultMetaRepository = new VaultMetaRepository(objectMapper, tempDir);
         vault = new Vault();
 
-        VaultBootstrapService bootstrap = new VaultBootstrapService(adminProperties, vaultMetaRepository);
+        VaultBootstrapService bootstrap = new VaultBootstrapService(adminProperties, vaultMetaRepository, logsRoot);
         bootstrap.bootstrap();
 
-        userAdminService = new UserAdminService(adminProperties, vaultMetaRepository);
-        userAdminService.createUser(USER_ID, USER_PASSPHRASE);
+        userRegistrationService = new UserRegistrationService(adminProperties, vaultMetaRepository, logsRoot);
+        userRegistrationService.register(USER_ID, USER_PASSPHRASE);
 
         userAuthService = new UserAuthService(vaultMetaRepository, vault);
     }
 
     @Test
     void unlock_correctPassphrase_vaultLoaded() {
-        // ④ 올바른 passphrase → DEK unwrap → Vault 에 DEK 적재
+        // ③ 올바른 passphrase → DEK unwrap → Vault 에 DEK 적재
         assertThat(vault.isLocked()).isTrue();
 
         userAuthService.unlock(USER_ID, USER_PASSPHRASE);
