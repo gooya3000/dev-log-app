@@ -21,13 +21,14 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 | **R-1** | vault 모델 재구축 (도메인·vault·storage·service·security) | `a07f614` | ✅ |
 | **R-2** | 웹 화면 재구축 (`/register` 추가, `/vault/users/new` 제거) | `b78fd06` | ✅ |
 | **R-3 (리뷰)** | `code-reviewer` 통합 리뷰 + M1(reset SecureRandom) 보강 | `7679b1c` | ✅ |
-| **R-3 (E2E)** | 메인 세션 `bootRun` 수동 검수 | — | ⏳ **다음 작업** |
-| **R-4** | 본인 자율 passphrase 변경 메뉴 (PLAN §1.3 NON-GOAL 결정 뒤집기 — PLAN 갱신 + 구현) | — | ⏳ |
+| **R-3 (E2E)** | 본인 `bootRun` 수동 검수 — 가입~admin reset 까지 동작 확인. `data/` 산출물 보존 (R-4 입력) | (이번 커밋) | ✅ |
+| **R-4** | 본인 자율 passphrase 변경 메뉴 (PLAN §1.3 NON-GOAL 결정 뒤집기 — PLAN 갱신 + 구현) | — | ⏳ **다음 작업** |
 
 ---
 
 ## 최근 결정 / 변경
 
+- **2026-05-22 — R-3 (E2E) 완료** (이번 커밋). 본인이 `bootRun` 으로 가입~admin reset 흐름까지 수동 검수. 검수 중 16자 임시 passphrase 의 UX 위화감을 발견해 R-4 신설로 이어짐. 검수 산출물 `data/.vault-meta.json` + `data/logs/test/2026-05-22_*.json` 1건은 R-4 구현·검증 입력으로 그대로 커밋 (PLAN §5.4: ciphertext 형태로 공개 리포 정상 커밋).
 - **2026-05-22 — R-4 신설 결정**. 사용자 본인 자율 passphrase 변경 메뉴를 PLAN §1.3 NON-GOAL 에서 빼서 R-4 로 신설. 이유: admin reset 으로 받은 SecureRandom 16자가 "임시" 라는 이름과 달리 영구 passphrase 가 되는 UX 위화감. R-3 E2E 통과 후 PLAN.md §1.3/§4.5.6/§6.2 갱신 → 구현.
 - **2026-05-22 — Phase R-3 (리뷰) 완료** (`7679b1c`). `code-reviewer` 통합 리뷰 결과:
   - **Blocker 0, Major 1 (M1), Minor 6 (m1~m6)**. M1 즉시 보강:
@@ -60,14 +61,12 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 
 ## 다음 액션
 
-1. **Phase R-3 (E2E)** — 메인 세션 `./gradlew bootRun` 으로 브라우저 수동 검수.
-   - 시나리오: 가입 → 로그인 → 회고 작성 → 로그아웃 → admin reset (서버 발급 16자 표시) → 새 임시 passphrase 로 재로그인 (회고 그대로 보임) → admin 사용자 삭제 (`data/logs/{userId}/` 디렉토리 사라짐).
-2. **Phase R-4** — 본인 자율 passphrase 변경 메뉴.
+1. **Phase R-4** — 본인 자율 passphrase 변경 메뉴.
    - PLAN.md §1.3 NON-GOAL 항목 제거 + §4.5.6 에 "본인 변경" 흐름 추가 (옛 passphrase 검증 → 새 passphrase 강도 검증 → `userWrappedDek` 만 rewrap, DEK_user/adminWrappedDek 무변경) + §6.2 에 R-4 행 추가.
-   - 구현: `/logs/profile/passphrase` 같은 ROLE_USER 화면. `spring-backend` 위임.
-3. **Minor 후속** (R-3 리뷰 m1~m6 중 우선순위 골라 묶음 처리) — R-4 와 함께 또는 별도 커밋. 본인 결정.
-4. **Vault 재셋업** — R-3 (E2E) + R-4 통과 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase, PLAN §5.5) → 회고 1~2건 작성 → `data/` 커밋·푸시.
-5. **Phase 4 체크리스트 명문화** — PLAN §6.2 "수동 체크리스트" 를 실제 항목으로 채우기.
+   - 구현: `/logs/profile/passphrase` 같은 ROLE_USER 화면. `spring-backend` 위임. 검증 입력은 현재 커밋된 `data/logs/test/` 사용자 1건.
+2. **Minor 후속** (R-3 리뷰 m1~m6 중 우선순위 골라 묶음 처리) — R-4 와 함께 또는 별도 커밋. 본인 결정.
+3. **Vault 재셋업** — R-4 통과 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase, PLAN §5.5) → 회고 1~2건 작성 → `data/` 커밋·푸시.
+4. **Phase 4 체크리스트 명문화** — PLAN §6.2 "수동 체크리스트" 를 실제 항목으로 채우기.
 
 ---
 

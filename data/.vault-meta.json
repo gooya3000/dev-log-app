@@ -1,0 +1,22 @@
+{
+  "v" : 1,
+  "kdf" : "PBKDF2-HMAC-SHA256",
+  "kdfIter" : 600000,
+  "adminSalt" : "ZGW8Fjo+U3kBRKDOPsVSiA==",
+  "users" : [ {
+    "id" : "test",
+    "salt" : "Q8X8gY5JiGppCkau5uerYQ==",
+    "passphraseHash" : "t+0u0vinQOEqjnCBeHcMu5+3Nq1z4XeNqbHOWS6NrX4=",
+    "createdAt" : "2026-05-22T06:18:37.29304Z",
+    "userWrappedDek" : {
+      "alg" : "AES-256-GCM",
+      "nonce" : "x4IHGorIk6VBuwiW",
+      "ct" : "O0gTuFM7ThWZhDsOGMFSLNqWf5qXKI5stmZONQ3BLUGC+LmOAnWUtZ3axhHUasNQ"
+    },
+    "adminWrappedDek" : {
+      "alg" : "AES-256-GCM",
+      "nonce" : "eNu18aqkFhAvmxxb",
+      "ct" : "0/biknVvXRoA2q+tczOQyzVxnZy7THTAxv1vZFg+7Ez7VspYB2K2sd2Ilfhtkgj+"
+    }
+  } ]
+}
