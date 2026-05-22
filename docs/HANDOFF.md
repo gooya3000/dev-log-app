@@ -1,7 +1,7 @@
 # DevLog — 핸드오프 노트
 
 PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위한 진행 노트**.
-마지막 갱신: 2026-05-21.
+마지막 갱신: 2026-05-22.
 
 ---
 
@@ -15,18 +15,26 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 | 2-B | AI 어댑터 + 프롬프트 빌더 | `da1f64f`, `07947a8` | ✅ |
 | 2-C | 저장소 테스트 보강 | `e6719de` | ✅ |
 | 3 (코드) | 블로그 초안 화면 통합 | `1c0a078` | ✅ |
-| 3 (리뷰) | `code-reviewer` 통합 검토 | — | ⏳ R-3 와 함께 |
-| 4 | E2E 수동 검수 | — | 🟡 일부 (구버전 모델 기준 — R-3 후 재실행 필요) |
+| 3 (리뷰) | `code-reviewer` 통합 검토 | `7679b1c` | ✅ (R-3 리뷰와 묶임) |
+| 4 | E2E 수동 검수 | — | 🟡 일부 (구버전 모델 기준 — R-3 E2E 후 재실행 필요) |
 | **R-PLAN** | PLAN.md vault 모델 전환 (공유 DEK → 사용자별 DEK + admin wrap) | `436d826` | ✅ |
 | **R-1** | vault 모델 재구축 (도메인·vault·storage·service·security) | `a07f614` | ✅ |
-| **R-2** | 웹 화면 재구축 (`/register` 추가, `/vault/users/new` 제거) | (이번 커밋) | ✅ |
-| **R-3** | code-reviewer + 메인 E2E 점검 | — | ⏳ **다음 작업** |
+| **R-2** | 웹 화면 재구축 (`/register` 추가, `/vault/users/new` 제거) | `b78fd06` | ✅ |
+| **R-3 (리뷰)** | `code-reviewer` 통합 리뷰 + M1(reset SecureRandom) 보강 | `7679b1c` | ✅ |
+| **R-3 (E2E)** | 메인 세션 `bootRun` 수동 검수 | — | ⏳ **다음 작업** |
+| **R-4** | 본인 자율 passphrase 변경 메뉴 (PLAN §1.3 NON-GOAL 결정 뒤집기 — PLAN 갱신 + 구현) | — | ⏳ |
 
 ---
 
 ## 최근 결정 / 변경
 
-- **2026-05-21 — Phase R-2 완료** (이번 커밋). `spring-backend` 위임으로 웹 화면 재구축.
+- **2026-05-22 — R-4 신설 결정**. 사용자 본인 자율 passphrase 변경 메뉴를 PLAN §1.3 NON-GOAL 에서 빼서 R-4 로 신설. 이유: admin reset 으로 받은 SecureRandom 16자가 "임시" 라는 이름과 달리 영구 passphrase 가 되는 UX 위화감. R-3 E2E 통과 후 PLAN.md §1.3/§4.5.6/§6.2 갱신 → 구현.
+- **2026-05-22 — Phase R-3 (리뷰) 완료** (`7679b1c`). `code-reviewer` 통합 리뷰 결과:
+  - **Blocker 0, Major 1 (M1), Minor 6 (m1~m6)**. M1 즉시 보강:
+    - 문제: `POST /vault/users/{id}/reset-passphrase` 가 admin 입력 passphrase 를 그대로 사용 → PLAN §4.5.6 step 5 "새 임시 passphrase = SecureRandom 16자 (admin 직접 입력 경로 없음)" 명문 위반. R-1 산출물 결함.
+    - 보강: `UserAdminService.resetPassphrase(userId)` 시그니처 변경, 내부 `SecureRandom` 으로 영숫자 16자 (≈ 95.3 bits) 생성 후 반환. 컨트롤러/템플릿/Form 정리. `./gradlew test` 95 → 96 통과.
+  - Minor 6건 (m1 `@ToString.Exclude` 무력, m2 `unlock.html value="self"` 잔재, m3 `list.html` createdAt 미표시, m4 `AdminUserController.list` User 도메인 직접 노출, m5 `UserAuthService` 죽은 코드, m6 `application-local.properties.example` 구버전 주석) — R-3 외 별도 후속.
+- **2026-05-21 — Phase R-2 완료** (`b78fd06`). `spring-backend` 위임으로 웹 화면 재구축.
   - 신규: `web/RegisterController`, `web/form/UserRegisterForm`, `templates/register.html`, `test/RegisterControllerTest` (5 케이스).
   - 수정: `SecurityConfig` `/register` permitAll, `unlock.html` `?registered` 안내, `vault/users/list.html` 생성 버튼 제거.
   - 제거: `UserCreateForm`, `vault/users/form.html`, `vault/users/created.html`.
@@ -52,10 +60,14 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 
 ## 다음 액션
 
-1. **Phase R-3 (통합 점검)** — `code-reviewer` 로 R-1 + R-2 묶음 diff 리뷰 (PLAN.md §6.2 R-3 행, §4.5/§5 정책 대비). 그 다음 메인 세션 `bootRun` 으로 브라우저 E2E.
-   - E2E 시나리오: 가입 → 로그인 → 회고 작성 → 로그아웃 → admin reset → 새 임시 passphrase 로 재로그인 (회고 그대로 보임) → admin 사용자 삭제 (디렉토리 사라짐).
-2. **Vault 재셋업** — R-3 통과 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase, 기준은 PLAN §5.5) → 회고 1~2건 작성 → `data/` 커밋·푸시.
-3. **Phase 4 체크리스트 명문화** — PLAN §6.2 의 "수동 체크리스트" 를 실제 항목으로 채우기.
+1. **Phase R-3 (E2E)** — 메인 세션 `./gradlew bootRun` 으로 브라우저 수동 검수.
+   - 시나리오: 가입 → 로그인 → 회고 작성 → 로그아웃 → admin reset (서버 발급 16자 표시) → 새 임시 passphrase 로 재로그인 (회고 그대로 보임) → admin 사용자 삭제 (`data/logs/{userId}/` 디렉토리 사라짐).
+2. **Phase R-4** — 본인 자율 passphrase 변경 메뉴.
+   - PLAN.md §1.3 NON-GOAL 항목 제거 + §4.5.6 에 "본인 변경" 흐름 추가 (옛 passphrase 검증 → 새 passphrase 강도 검증 → `userWrappedDek` 만 rewrap, DEK_user/adminWrappedDek 무변경) + §6.2 에 R-4 행 추가.
+   - 구현: `/logs/profile/passphrase` 같은 ROLE_USER 화면. `spring-backend` 위임.
+3. **Minor 후속** (R-3 리뷰 m1~m6 중 우선순위 골라 묶음 처리) — R-4 와 함께 또는 별도 커밋. 본인 결정.
+4. **Vault 재셋업** — R-3 (E2E) + R-4 통과 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase, PLAN §5.5) → 회고 1~2건 작성 → `data/` 커밋·푸시.
+5. **Phase 4 체크리스트 명문화** — PLAN §6.2 "수동 체크리스트" 를 실제 항목으로 채우기.
 
 ---
 
