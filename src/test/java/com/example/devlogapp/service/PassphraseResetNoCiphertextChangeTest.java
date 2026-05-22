@@ -30,7 +30,7 @@ class PassphraseResetNoCiphertextChangeTest {
     private static final String ADMIN_PASSPHRASE = "test-admin-pass-reset";
     private static final String USER_ID = "alice";
     private static final String OLD_PASSPHRASE = "old-user-pass";
-    private static final String NEW_PASSPHRASE = "new-user-pass-2024";
+    // NEW_PASSPHRASE 는 서비스 내부에서 SecureRandom 으로 생성 (PLAN §4.5.6 step 5)
 
     private final ObjectMapper objectMapper = new JacksonConfig().objectMapper();
     private VaultMetaRepository vaultMetaRepository;
@@ -78,8 +78,8 @@ class PassphraseResetNoCiphertextChangeTest {
         Map<String, byte[]> before = captureFiles(userLogsDir);
         vault.lock();
 
-        // passphrase 재설정
-        userAdminService.resetPassphrase(USER_ID, NEW_PASSPHRASE);
+        // passphrase 재설정 — 새 임시 passphrase 는 서비스가 SecureRandom 으로 생성하여 반환
+        String newPassphrase = userAdminService.resetPassphrase(USER_ID);
 
         // 파일 내용 캡처 (after)
         Map<String, byte[]> after = captureFiles(userLogsDir);
@@ -93,7 +93,7 @@ class PassphraseResetNoCiphertextChangeTest {
         }
 
         // 새 passphrase 로 복호화 가능
-        userAuthService.unlock(USER_ID, NEW_PASSPHRASE);
+        userAuthService.unlock(USER_ID, newPassphrase);
         List<DevLog> logs = logService.findAll();
         assertThat(logs).hasSize(1);
         assertThat(logs.get(0).getTitle()).isEqualTo("테스트 회고");

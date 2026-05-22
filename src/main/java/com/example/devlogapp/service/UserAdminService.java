@@ -60,20 +60,23 @@ public class UserAdminService {
 
     /**
      * 사용자 passphrase 재설정.
-     * adminWrappedDek 로 DEK_user 회수 → 새 passphrase 로 userWrappedDek 만 재발급.
-     * DEK_user · adminWrappedDek · 회고 파일은 그대로.
-     * PLAN.md §4.5.6 사용자 passphrase 재설정 흐름 참조.
+     * adminWrappedDek 로 DEK_user 회수 → 내부 SecureRandom 으로 새 임시 passphrase 생성 →
+     * userWrappedDek 만 재발급. DEK_user · adminWrappedDek · 회고 파일은 그대로.
+     * PLAN.md §4.5.6 사용자 passphrase 재설정 흐름 5번: admin 직접 입력 경로 없음.
      *
-     * @param userId        대상 사용자 ID
-     * @param newPassphrase 새 임시 passphrase
+     * @param userId 대상 사용자 ID
+     * @return 새로 생성된 임시 passphrase (영숫자 16자, 1회 반환 후 호출자에서 표시)
      */
-    public void resetPassphrase(String userId, String newPassphrase) {
+    public String resetPassphrase(String userId) {
         VaultMeta meta = loadMeta();
 
         User target = meta.getUsers().stream()
                 .filter(u -> u.getId().equals(userId))
                 .findFirst()
                 .orElseThrow(() -> new UserNotFoundException(userId));
+
+        // 5. 새 임시 passphrase = SecureRandom 영숫자 16자 (PLAN §4.5.6 step 5)
+        char[] tempPassChars = generateTempPassphrase();
 
         byte[] kAdmin = null;
         byte[] dekUser = null;
@@ -92,11 +95,11 @@ public class UserAdminService {
             User.WrappedDek awd = target.getAdminWrappedDek();
             dekUser = KeyWrapper.unwrap(kAdmin, awd.getNonce(), awd.getCt());
 
-            // 5-6. 새 salt
+            // 6. newUserSalt
             RANDOM.nextBytes(newUserSalt);
 
             // 7. newDerivation = PBKDF2(새 passphrase, newUserSalt, 64)
-            newDerivation = PassphraseKdf.deriveUser(newPassphrase.toCharArray(), newUserSalt);
+            newDerivation = PassphraseKdf.deriveUser(tempPassChars, newUserSalt);
             newKUser = Arrays.copyOfRange(newDerivation, 0, 32);
             newHUser = Arrays.copyOfRange(newDerivation, 32, 64);
             Arrays.fill(newDerivation, (byte) 0);
@@ -120,8 +123,12 @@ public class UserAdminService {
             // 10. .vault-meta.json 저장
             vaultMetaRepository.save(meta.withUsers(users));
             log.info("Passphrase reset for user: {}", userId);
+
+            // 반환 전 String 으로 변환 (호출자가 1회 표시 후 FlashAttribute 소비)
+            return new String(tempPassChars);
         } finally {
             // 11. 폐기
+            Arrays.fill(tempPassChars, '\0');
             if (kAdmin != null) Arrays.fill(kAdmin, (byte) 0);
             if (dekUser != null) Arrays.fill(dekUser, (byte) 0);
             if (newDerivation != null) Arrays.fill(newDerivation, (byte) 0);
@@ -129,6 +136,19 @@ public class UserAdminService {
             if (newHUser != null) Arrays.fill(newHUser, (byte) 0);
             Arrays.fill(newUserSalt, (byte) 0);
         }
+    }
+
+    /**
+     * SecureRandom 으로 영숫자([A-Za-z0-9]) 16자 임시 passphrase 생성.
+     * alphabet 62자, 16자 ≈ 95.3 bits 엔트로피.
+     */
+    private static char[] generateTempPassphrase() {
+        final String ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        char[] buf = new char[16];
+        for (int i = 0; i < buf.length; i++) {
+            buf[i] = ALPHABET.charAt(RANDOM.nextInt(ALPHABET.length()));
+        }
+        return buf;
     }
 
     /**

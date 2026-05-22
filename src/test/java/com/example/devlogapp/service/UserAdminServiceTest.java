@@ -151,7 +151,6 @@ class UserAdminServiceTest {
     void resetPassphrase_oldFails_newSucceeds_dekSame() {
         // ④ reset 후 옛 passphrase 불가, 새 passphrase 가능, DEK_user 동일
         String oldPass = "old-passphrase";
-        String newPass = "new-passphrase-2024";
 
         userRegistrationService.register(USER_ID, oldPass);
 
@@ -160,8 +159,12 @@ class UserAdminServiceTest {
         byte[] dekBefore = vault.copyDek();
         vault.lock();
 
-        // passphrase 재설정
-        userAdminService.resetPassphrase(USER_ID, newPass);
+        // passphrase 재설정 — 새 passphrase 는 서비스가 SecureRandom 으로 생성하여 반환
+        String newPass = userAdminService.resetPassphrase(USER_ID);
+
+        // 반환된 passphrase: 정확히 16자, 영숫자만
+        assertThat(newPass).hasSize(16);
+        assertThat(newPass).matches("[A-Za-z0-9]+");
 
         // 옛 passphrase 로는 실패
         assertThatThrownBy(() -> userAuthService.unlock(USER_ID, oldPass))
@@ -181,13 +184,22 @@ class UserAdminServiceTest {
     }
 
     @Test
+    void resetPassphrase_returnsDifferentValueEachTime() {
+        // 두 번 호출 시 각각 다른 passphrase 반환 (랜덤 검증)
+        userRegistrationService.register(USER_ID, "initial-pass");
+        String first = userAdminService.resetPassphrase(USER_ID);
+        String second = userAdminService.resetPassphrase(USER_ID);
+        assertThat(first).isNotEqualTo(second);
+    }
+
+    @Test
     void resetPassphrase_adminWrappedDekUnchanged() {
         // ④ reset 후 adminWrappedDek 는 그대로
         userRegistrationService.register(USER_ID, "old-pass");
         VaultMeta before = vaultMetaRepository.load().orElseThrow();
         String adminCtBefore = before.getUsers().get(0).getAdminWrappedDek().getCt();
 
-        userAdminService.resetPassphrase(USER_ID, "new-pass");
+        userAdminService.resetPassphrase(USER_ID);
         VaultMeta after = vaultMetaRepository.load().orElseThrow();
         String adminCtAfter = after.getUsers().get(0).getAdminWrappedDek().getCt();
 
@@ -236,7 +248,7 @@ class UserAdminServiceTest {
         vaultMetaRepository.save(meta.withUsers(java.util.List.of(tamperedUser)));
 
         // reset 시 unwrap 실패
-        assertThatThrownBy(() -> userAdminService.resetPassphrase(USER_ID, "new-pass"))
+        assertThatThrownBy(() -> userAdminService.resetPassphrase(USER_ID))
                 .isInstanceOf(IllegalStateException.class);
     }
 }

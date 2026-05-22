@@ -4,13 +4,9 @@ import com.example.devlogapp.domain.User;
 import com.example.devlogapp.service.UserAdminService;
 import com.example.devlogapp.vault.VaultMeta;
 import com.example.devlogapp.storage.VaultMetaRepository;
-import com.example.devlogapp.web.form.ResetPassphraseForm;
-import jakarta.validation.Valid;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
-import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -50,24 +46,14 @@ public class AdminUserController {
     @GetMapping("/{id}/reset-passphrase")
     public String resetPassphraseForm(@PathVariable String id, Model model) {
         model.addAttribute("userId", id);
-        model.addAttribute("resetPassphraseForm", new ResetPassphraseForm());
         return "vault/users/confirm-reset";
     }
 
-    /** POST /vault/users/{id}/reset-passphrase — 재설정 → /vault/users/{id}/reset-result (1회 노출). */
+    /** POST /vault/users/{id}/reset-passphrase — SecureRandom passphrase 발급 → /vault/users/{id}/reset-result (1회 노출). */
     @PostMapping("/{id}/reset-passphrase")
-    public String resetPassphrase(@PathVariable String id,
-                                   @Valid @ModelAttribute ResetPassphraseForm form,
-                                   BindingResult bindingResult,
-                                   Model model,
-                                   RedirectAttributes redirectAttributes) {
-        if (bindingResult.hasErrors()) {
-            model.addAttribute("userId", id);
-            return "vault/users/confirm-reset";
-        }
-        userAdminService.resetPassphrase(id, form.getPassphrase());
-        // 1회 노출: FlashAttribute 로 새 임시 passphrase 전달
-        redirectAttributes.addFlashAttribute("newPassphrase", form.getPassphrase());
+    public String resetPassphrase(@PathVariable String id, RedirectAttributes redirectAttributes) {
+        String newPassphrase = userAdminService.resetPassphrase(id);
+        redirectAttributes.addFlashAttribute("newPassphrase", newPassphrase);
         return "redirect:/vault/users/" + id + "/reset-result";
     }
 
