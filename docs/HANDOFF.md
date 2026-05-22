@@ -1,7 +1,7 @@
 # DevLog — 핸드오프 노트
 
 PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위한 진행 노트**.
-마지막 갱신: 2026-05-22.
+마지막 갱신: 2026-05-22 (R-4 종료).
 
 ---
 
@@ -22,13 +22,21 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 | **R-2** | 웹 화면 재구축 (`/register` 추가, `/vault/users/new` 제거) | `b78fd06` | ✅ |
 | **R-3 (리뷰)** | `code-reviewer` 통합 리뷰 + M1(reset SecureRandom) 보강 | `7679b1c` | ✅ |
 | **R-3 (E2E)** | 본인 `bootRun` 수동 검수 — 가입~admin reset 까지 동작 확인. `data/` 산출물 보존 (R-4 입력) | (이번 커밋) | ✅ |
-| **R-4** | 본인 자율 passphrase 변경 메뉴 (PLAN §1.3 NON-GOAL 결정 뒤집기 — PLAN 갱신 + 구현) | — | ⏳ **다음 작업** |
+| **R-4 (PLAN)** | §1.3 NON-GOAL 결정 뒤집기 + §1.1/§2/§4.5.6/§5.6/§6 본인 변경 흐름 신설 | `b0423bb` | ✅ |
+| **R-4 (구현 + 리뷰)** | ProfileController + UserAccountService + PassphraseChangeForm + 템플릿 + 단위/슬라이스 13개. code-reviewer Blocker 0 / Major 0 / Minor 5 (모두 후속) | (이번 커밋) | ✅ |
 
 ---
 
 ## 최근 결정 / 변경
 
-- **2026-05-22 — R-3 (E2E) 완료** (이번 커밋). 본인이 `bootRun` 으로 가입~admin reset 흐름까지 수동 검수. 검수 중 16자 임시 passphrase 의 UX 위화감을 발견해 R-4 신설로 이어짐. 검수 산출물 `data/.vault-meta.json` + `data/logs/test/2026-05-22_*.json` 1건은 R-4 구현·검증 입력으로 그대로 커밋 (PLAN §5.4: ciphertext 형태로 공개 리포 정상 커밋).
+- **2026-05-22 — Phase R-4 완료** (이번 커밋). `spring-backend` 위임으로 `/logs/profile/passphrase` GET/POST 구현. PLAN §4.5.6 본인 변경 11단계(옛 검증 → DEK_user sanity check → userWrappedDek 만 rewrap → adminWrappedDek 무변경 → 세션 유지) 그대로. `./gradlew test` 109개 통과 (R-3 96 + 신규 13). code-reviewer 통합 리뷰 결과 **Blocker 0 / Major 0 / Minor 5**:
+  - r1: `PassphraseChangeForm` 에 클래스 `@ToString` 없어 `@ToString.Exclude` 무력 (실효 노출 X, 형제 폼들과 패턴 불일치 / PLAN §5.6 보증 약함)
+  - r2: `currentSession.getUserId() == null` 가드 누락 → 500 노출 (PLAN §4.5.6 단계 3 "세션 무효 → /unlock 강제" 와 어긋남)
+  - r3: `VaultMetaRepository.save` 실패가 500 그대로 (PLAN §4.5.6 단계 10 "일반 에러" 와 어긋남)
+  - r4: MockMvc 슬라이스 `any()` 매처로 userId null 흐름 통과 → `ArgumentCaptor` 보강 권장
+  - r5: 단계 7 직전 `vault.copyDek()` `VaultLockedException` 500 가능성 (정상 흐름 영향 X)
+  - 5건 모두 R-4 외 별도 후속. R-3 의 m1~m6 와 함께 묶음 처리 후보.
+- **2026-05-22 — R-3 (E2E) 완료** (`19b9eb2`). 본인이 `bootRun` 으로 가입~admin reset 흐름까지 수동 검수. 검수 중 16자 임시 passphrase 의 UX 위화감을 발견해 R-4 신설로 이어짐. 검수 산출물 `data/.vault-meta.json` + `data/logs/test/2026-05-22_*.json` 1건은 R-4 구현·검증 입력으로 그대로 커밋 (PLAN §5.4: ciphertext 형태로 공개 리포 정상 커밋).
 - **2026-05-22 — R-4 신설 결정**. 사용자 본인 자율 passphrase 변경 메뉴를 PLAN §1.3 NON-GOAL 에서 빼서 R-4 로 신설. 이유: admin reset 으로 받은 SecureRandom 16자가 "임시" 라는 이름과 달리 영구 passphrase 가 되는 UX 위화감. R-3 E2E 통과 후 PLAN.md §1.3/§4.5.6/§6.2 갱신 → 구현.
 - **2026-05-22 — Phase R-3 (리뷰) 완료** (`7679b1c`). `code-reviewer` 통합 리뷰 결과:
   - **Blocker 0, Major 1 (M1), Minor 6 (m1~m6)**. M1 즉시 보강:
@@ -61,11 +69,9 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 
 ## 다음 액션
 
-1. **Phase R-4** — 본인 자율 passphrase 변경 메뉴.
-   - PLAN.md §1.3 NON-GOAL 항목 제거 + §4.5.6 에 "본인 변경" 흐름 추가 (옛 passphrase 검증 → 새 passphrase 강도 검증 → `userWrappedDek` 만 rewrap, DEK_user/adminWrappedDek 무변경) + §6.2 에 R-4 행 추가.
-   - 구현: `/logs/profile/passphrase` 같은 ROLE_USER 화면. `spring-backend` 위임. 검증 입력은 현재 커밋된 `data/logs/test/` 사용자 1건.
-2. **Minor 후속** (R-3 리뷰 m1~m6 중 우선순위 골라 묶음 처리) — R-4 와 함께 또는 별도 커밋. 본인 결정.
-3. **Vault 재셋업** — R-4 통과 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase, PLAN §5.5) → 회고 1~2건 작성 → `data/` 커밋·푸시.
+1. **R-4 본인 검수 (bootRun E2E)** — `./gradlew bootRun` 으로 직접 띄워 ① 로그인 ② `/logs/profile/passphrase` 로 본인 변경 ③ 안내 배너 + 세션 유지 ④ 변경 후 회고 목록 정상 노출 ⑤ 로그아웃 후 새 passphrase 로 재로그인 ⑥ 옛 passphrase 로는 실패 까지 확인. 통과하면 R-4 종결.
+2. **Minor 후속 묶음** — R-3 m1~m6 + R-4 r1~r5 우선순위 골라 묶음 처리. 본인 결정.
+3. **Vault 재셋업** — Minor 정리 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase, PLAN §5.5) → 회고 1~2건 작성 → `data/` 커밋·푸시.
 4. **Phase 4 체크리스트 명문화** — PLAN §6.2 "수동 체크리스트" 를 실제 항목으로 채우기.
 
 ---
