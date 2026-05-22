@@ -55,22 +55,38 @@
 
 ## 서브에이전트 작업 시
 
-이 리포는 `.claude/agents/`에 **코드 작업용 4개 + 메타 1개**의 커스텀 에이전트를 정의해 두었다. Phase별 매핑은 PLAN.md §6.4 표 (코드용) / §6.5 (메타) 참조.
+이 리포는 `.claude/agents/`에 **코드 작업용 6개 + 메타 1개**의 커스텀 에이전트를 정의해 두었다. Phase별 매핑은 PLAN.md §6.4 표 (코드용) / §6.5 (메타) 참조.
 
-코드 작업용 (PLAN.md §6.4):
-- `spring-backend` (sonnet, 풀권한) — Phase 1, 2-A, **R-1/R-2** (vault 모델 재구축)
-- `ai-integration` (sonnet, 풀권한) — Phase 2-B 및 Gemini 어댑터 후속. 시스템 프롬프트에 §5 키 정책이 박혀 있음
-- `test-engineer` (haiku, 프로덕션 코드 수정 금지 규칙) — Phase 2-C, 테스트 보강
-- `code-reviewer` (opus, **읽기 전용**) — 각 Phase 작업 종료 직후, 커밋·푸시 직전 통합 리뷰. Edit/Write 도구 없음
+새 Phase 는 **계약 → 사용자 확인 → 구현/테스트 작성 병렬 → 사용자 확인 → 테스트 실행** 4단 흐름으로 진행한다:
 
-메타 (PLAN.md §6.5):
-- `instruction-auditor` (opus, **읽기 전용**, Read/Grep/Glob 만) — 지시 문서(`*.md`, `.claude/agents/*`) 자체의 모순·모호성·중복·역할 혼재 점검. 코드는 안 봄. 사용자가 직접 호출하며 판단 모호 시 메인 세션에 확인 질문을 던지는 형태
+```
+contract-designer (시그니처·DTO·JavaDoc 행동 명세)
+   ↓ [사용자 확인 게이트]
+   ├─ contract-implementer  (본문 채움, 테스트 X, 실행 X)
+   └─ test-engineer         (테스트 작성, 실행 X)        ← 병렬, isolation=worktree
+   ↓ [사용자 확인 게이트]
+test-verifier (./gradlew test 실행 + 실패 분류 + 품질 리포트)
+   ↓
+code-reviewer (Phase 묶음 종료 시 — 매 Phase 가 아님)
+```
+
+코드 작업용 6개 + 메타 1개. 상세 표·도구 권한·트리거는 **PLAN.md §6.4 (코드용 6) / §6.5 (메타 1) 단일 출처**. 본 절에선 핵심만:
+
+- `contract-designer` (sonnet) — Phase 시작 시 시그니처·DTO·JavaDoc 행동 명세만. 본문 비움
+- `contract-implementer` (sonnet) — 계약 확정 후 본문만. 시그니처 변경·테스트 작성·`./gradlew test` 실행 금지
+- `test-engineer` (haiku) — 계약 확정 후 contract-implementer 와 **병렬**(`isolation=worktree`) 로 테스트 작성. 실행 금지
+- `test-verifier` (sonnet, Read/Bash/Grep/Glob 만) — 테스트 끝난 후 `./gradlew test` 실행 + 실패 분류(TEST_BUG/IMPL_BUG/CONTRACT_GAP/UNCLEAR) + 1차 품질 리포트
+- `ai-integration` (sonnet) — Gemini 어댑터 전담. **4단 흐름과 별도 트랙** (WireMock stub 구조가 달라 분리 보류)
+- `code-reviewer` (opus, 읽기 전용) — **Phase 묶음 종료 시** (예: R-시리즈 통합 끝) 한 번. 매 Phase 가 아님
+- `instruction-auditor` (opus, Read/Grep/Glob 만) — 지시 문서 자체 점검 메타. 사용자가 직접 호출
 
 위임 시 규칙:
 - 브리핑에 **PLAN.md의 어느 절/Phase인지** 항상 명시.
 - "이해를 위임하지 않는다." 구체적인 파일/시그니처/통과시켜야 할 테스트로 좁혀서 위임.
-- Phase 1(도메인+저장소)이 후속 작업의 계약이라 단독으로 먼저 끝낸다. Phase 2-A/2-B/2-C는 병렬. **현재 상태는 HANDOFF.md 참조** — Phase 1–3 종료, R-1/R-2 종료, R-3(통합 리뷰+E2E)이 다음.
-- 서브에이전트의 "완료했습니다"는 의도일 뿐. 메인 세션이 diff·테스트로 직접 확인. 각 Phase 작업 종료 직후, 커밋·푸시 직전 `code-reviewer` 한 번 더 돌릴 것.
+- contract-implementer + test-engineer 병렬 호출은 **`isolation=worktree` 강제** — git index 충돌 방지.
+- test-verifier 의 실패 분류 리포트만 보고 메인 세션이 재호출 여부를 결정. test-verifier 가 다음 에이전트를 자동 호출하지 않는다.
+- 서브에이전트의 "완료했습니다"는 의도일 뿐. 메인 세션이 diff·테스트로 직접 확인. Phase 묶음이 끝나 커밋·푸시 직전이면 `code-reviewer` 한 번 돌릴 것.
+- **현재 상태는 HANDOFF.md 참조** — Phase 1–3, R-1/R-2/R-3/R-4 모두 종료 (당시 `spring-backend` 에이전트 사용 이력은 그대로 보존).
 
 ## 커뮤니케이션
 

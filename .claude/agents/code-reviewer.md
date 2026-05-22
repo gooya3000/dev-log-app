@@ -1,6 +1,6 @@
 ---
 name: code-reviewer
-description: 변경 사항을 PLAN.md / CLAUDE.md / 보안 정책에 대조해 리뷰만 수행한다. 코드 수정 권한 없음 — 리포트만 반환. main 직푸시 워크플로우라 "머지 전" 트리거는 없음. 각 Phase 작업 종료 직후, 커밋·푸시 직전에 사용 (Phase 3 / R-시리즈 묶음 통합 시 동일).
+description: 변경 사항을 PLAN.md / CLAUDE.md / 보안 정책에 대조해 리뷰만 수행한다. 코드 수정 권한 없음 — 리포트만 반환. main 직푸시 워크플로우라 "머지 전" 트리거는 없음. **Phase 묶음 종료 시점** (예: Phase 3 끝, R-시리즈 통합 끝) 에 커밋·푸시 직전 한 번 호출 — 매 Phase 마다 부르는 게 아님.
 tools: Read, Grep, Glob, Bash
 model: opus
 ---
@@ -37,7 +37,7 @@ model: opus
 - [ ] 도메인 모델이 불필요하게 mutable한가?
 - [ ] 컨트롤러에 비즈니스 로직이 새 들어왔는가?
 - [ ] 테스트가 함께 들어왔는가? (저장소·컨트롤러·AI 어댑터 변경 시)
-- [ ] 결정론적이지 않은 테스트(`Instant.now()`, 랜덤)가 있는가?
+- [ ] 결정론적이지 않은 테스트(`Instant.now()`, 랜덤)가 있는가? — **2차 검토.** 1차는 매 Phase 종료 시 test-verifier 가 본다. 본 항목은 test-verifier 가 놓친 부분을 묶음 종료 시 다시 한 번 훑는 안전망.
 
 ### D. 미충족/리스크
 - PLAN.md에 있는데 누락된 항목

@@ -668,11 +668,13 @@ Phase 0~3 (구버전 — 공유 DEK 모델) 는 모두 머지된 상태. 사용�
 
 ### 6.2 단계별 서브에이전트 위임 표
 
+> **이 표는 Phase 0 ~ R-4 까지의 위임 이력(완료·잠금).** R-시리즈 이전엔 `spring-backend` 한 에이전트가 구현+테스트+실행을 직렬로 했다. **신규 Phase 는 §6.4 의 4단 흐름(contract-designer → contract-implementer + test-engineer 병렬 → test-verifier → code-reviewer)** 을 적용한다. 본 표의 "spring-backend" 행은 그 시점의 결정 기록일 뿐, 현재 운영 절차가 아니다.
+
 | Phase | 사용 에이전트 | 인풋 (브리핑에 포함할 것) | 아웃풋 / Done 기준 |
 |---|---|---|---|
 | 0 | (메인 세션 직접) | 현 `build.gradle`, 추가할 의존성, JSON 저장 경로 | ✓ 완료 |
-| 1 | `spring-backend` | 본 문서 §1.2, §3, §4 (구버전 공유 DEK 모델), §5.6/§5.7 | ✓ 완료 (현재 재구축 대상) |
-| 2-A | `spring-backend` | §2 (구버전 URL 표), §3 web, §5.6/§5.7 | ✓ 완료 (현재 재구축 대상) |
+| 1 | `spring-backend` | 본 문서 §1.2, §3, §4 (당시 공유 DEK 모델), §5.6/§5.7 | ✅ 완료 (R-1/R-2 에서 사용자별 DEK + admin wrap 모델로 대체됨) |
+| 2-A | `spring-backend` | §2 (당시 URL 표), §3 web, §5.6/§5.7 | ✅ 완료 (R-1/R-2 에서 셀프 가입 흐름으로 대체됨) |
 | 2-B | `ai-integration` | §3 ai 패키지 + §5 키 정책 | ✓ 완료 |
 | 2-C | `test-engineer` | atomic write·동시 read·UTF-8·`schemaVersion` | ✓ 완료 |
 | 3 | 메인 + `code-reviewer` | Phase 2-A/B 산출물 | ✓ 완료 |
@@ -681,28 +683,52 @@ Phase 0~3 (구버전 — 공유 DEK 모델) 는 모두 머지된 상태. 사용�
 | **R-3** | `code-reviewer` + 메인 | R-1, R-2 diff 전체 + §4.5 정책 + §5 시크릿 정책 | code-reviewer 리포트 PASS. 메인 세션이 `./gradlew bootRun` 으로 ① 가입 ② 로그인 ③ 회고 작성 ④ 로그아웃 ⑤ admin reset ⑥ 새 임시 passphrase 로 재로그인 — 회고 그대로 보임 ⑦ admin 사용자 삭제 → 디렉토리 사라짐 까지 통과 |
 | **R-4** | `spring-backend` → `code-reviewer` | 본 문서 §1.1 (본인 변경 행), §2 (`/logs/profile/passphrase` GET/POST), §4.5.6 본인 변경 흐름 11단계, §5.6 (PassphraseChangeForm @ToString.Exclude). **신규 파일**: `web/ProfileController`, `web/form/PassphraseChangeForm`, `service/UserAccountService`, `templates/logs/profile/passphrase.html`. **수정 파일**: `security/SecurityConfig` (`/logs/profile/**` 명시적으로 ROLE_USER — 이미 `/logs/**` 산하라 권한은 OK, 다만 CSRF/redirect 동작 확인), `templates/logs/list.html` (상단 헤더에 "비밀번호 변경" 링크 추가 + `?passphrase-changed` 안내 배너), `storage/VaultMetaRepository` 필요시 atomic 갱신 보강. **건드리지 말 파일**: `vault/**` 내부 (Vault·VaultCipher·KeyWrapper·PassphraseKdf 의 시그니처는 그대로), `ai/**`, `web/BlogDraftController`, admin 관련 모든 파일 | 테스트: ① `GET /logs/profile/passphrase` 200 (ROLE_USER) ② `POST` 옛/새/확인 일치 → 302 `/logs?passphrase-changed`, users[] 엔트리의 salt·passphraseHash·userWrappedDek 만 교체, adminWrappedDek 동일 ③ 변경 후 같은 세션으로 `/logs` 200 (세션 유지·DEK_user 동일) ④ 변경 후 새 passphrase 로 `/unlock` 가능, 옛 passphrase 로 `/unlock` 실패 ⑤ admin 의 adminWrappedDek 우회로로 DEK_user 회수 시 본인 변경 전과 동일한 32바이트 ⑥ 옛 passphrase 불일치 → 200 재렌더 + 일반화 에러, users[] 무변경 ⑦ new != confirm → 200 재렌더 + 검증 에러, users[] 무변경 ⑧ ROLE_ADMIN(=/vault 세션) 단독으로 진입 시 차단 (ROLE_USER 아님) ⑨ 미인증 진입 시 `/unlock` 리다이렉트 ⑩ 로그·예외에 passphrase·DEK·K_user 노출 없음 |
 
-### 6.3 서브에이전트에 브리핑할 때 지킬 규칙
+### 6.3 (이전 절은 §6.4 4단 흐름으로 통합)
 
-- **한 번에 한 Phase만 위임한다.** 여러 단계를 통째로 맡기면 중간 의사결정이 묻힌다.
-- **Phase 2-A / 2-B / 2-C는 병렬로 위임 가능하다** (인터페이스 합의가 Phase 1에서 끝나 있기 때문). 의존성이 없는 작업은 같은 메시지에서 동시에 띄운다.
-- 각 위임에 반드시 포함할 것:
-  1. 이 문서의 어느 절(§)을 따르는지
-  2. 변경해도 되는 파일 / 건드리지 말아야 할 파일
-  3. "Done" 판정 기준 (어떤 테스트가 통과해야 하는가)
-  4. 응답 길이 제한 (긴 설명 대신 변경 요약)
-- **이해는 위임하지 않는다.** "알아서 잘 해줘"가 아니라 "이 인터페이스, 이 시그니처, 이 테스트를 통과시켜줘"로 좁힌다.
-- **검증은 메인 세션에서.** 서브에이전트의 "완료했습니다"는 의도이지 사실이 아니므로, 메인에서 diff와 테스트 결과를 직접 본다.
+§6.3 의 "서브에이전트 브리핑 규칙" 은 단일 위임 전제로 쓰여 있었다. R-시리즈 이후 §6.4 의 4단 흐름이 정식 절차이므로, 규칙은 §6.4 "브리핑 / 위임 시 규칙" 으로 옮겼다. 본 절은 번호 보존용 자리표지.
 
 ### 6.4 어떤 에이전트 타입을 쓸까
 
-이 리포는 **프로젝트 레벨 커스텀 에이전트 4개를 정의**했다 (`.claude/agents/`). 각자 모델·권한·책임이 다르게 설계되어 있다.
+이 리포는 **프로젝트 레벨 커스텀 에이전트를 코드 작업용 6개 + 메타 1개**로 정의했다 (`.claude/agents/`). 새 Phase 는 **계약 → 사용자 확인 → 구현/테스트 작성 병렬 → 사용자 확인 → 테스트 실행** 4단 흐름으로 진행한다 (이전: spring-backend 한 에이전트가 구현+테스트+실행을 직렬로 했음 → 작업량·시간 부담으로 분리).
+
+#### 워크플로우 흐름
+
+```
+contract-designer (시그니처·DTO·JavaDoc 행동 명세)
+   ↓ [사용자 확인 게이트]
+   ├─ contract-implementer  (본문 채움, 테스트 X, 실행 X)
+   └─ test-engineer         (테스트 작성, 실행 X)        ← 병렬, isolation=worktree
+   ↓ [사용자 확인 게이트]
+test-verifier (./gradlew test 실행 + 실패 분류 + 품질 리포트)
+   ↓ (실패 시 메인 세션이 contract-* / test-engineer 재호출 결정)
+code-reviewer (Phase 묶음 종료 시 통합 리뷰)
+```
+
+#### 에이전트 표
 
 | 에이전트 | 모델 | 권한 | 어디에 쓰나 |
 |---|---|---|---|
-| `spring-backend` | sonnet | 풀권한 | Phase 1 (도메인+저장소), Phase 2-A (웹 CRUD) |
-| `ai-integration` | sonnet | 풀권한 | Phase 2-B (AI 어댑터) — §5 키 정책을 시스템 프롬프트에 박아둠 |
-| `test-engineer` | haiku | 풀권한 (단, 프로덕션 코드 수정 금지를 본문 규칙으로) | Phase 2-C, 그리고 다른 Phase의 테스트 보강 |
-| `code-reviewer` | opus | **읽기 전용** (Edit/Write 없음) | 각 Phase 작업 종료 직후, 커밋·푸시 직전 (Phase 3 / R-시리즈 묶음 통합 시 동일). main 직푸시 워크플로우라 "머지 전" 트리거는 없음 — 단계 종료마다 한 번씩 |
+| `contract-designer` | sonnet | 풀권한 (단, 본문 구현 금지 — 시그니처/DTO/JavaDoc 행동 명세만) | Phase 시작 시. 인터페이스·메서드 시그니처·DTO·예외 타입·JavaDoc given/when/then 까지 작성하고 본문은 비움 (`UnsupportedOperationException`). 산출 후 **사용자 확인 게이트** |
+| `contract-implementer` | sonnet | 풀권한 | 계약 확정 후. 비어 있는 메서드 본문만 채움. **시그니처 변경 금지**, **테스트 작성 금지**, `./gradlew test` 실행 금지. 컴파일은 `compileJava` 까지만 |
+| `test-engineer` | haiku | `src/test/**` 만 수정 (`src/main/**` 본문 규칙으로 금지) | 계약 확정 후, contract-implementer 와 **병렬**. JavaDoc 행동 명세를 1차 명세로 테스트 작성. **실행은 안 함** |
+| `ai-integration` | sonnet | 풀권한 | Phase 2-B 등 AI 어댑터(Gemini) 전담. **4단 흐름과 별도 트랙** — WireMock stub 구조가 달라 분리 보류. 직접 한 에이전트가 어댑터+보안 테스트까지 책임짐 |
+| `test-verifier` | sonnet | **Read/Bash/Grep/Glob 만** (Edit/Write 없음) | 테스트 작성 끝난 후. `./gradlew test` 실행 → 실패를 TEST_BUG/IMPL_BUG/CONTRACT_GAP/UNCLEAR 로 분류 → 테스트 코드 품질(AAA/결정론/외부 의존 0/실제 API 키 노출) **1차** 리포트. **자동 루프백 금지** — 리포트만. code-reviewer 와의 분담: 본 에이전트는 매 Phase 의 1차 안전망, code-reviewer 는 묶음 종료 시 2차 |
+| `code-reviewer` | opus | **읽기 전용** (Edit/Write 없음) | **Phase 묶음 종료 시** (예: Phase 3 끝, R-시리즈 통합 끝) 커밋·푸시 직전 한 번. 매 Phase 마다가 아님. main 직푸시 워크플로우라 "머지 전" 트리거는 없음 |
+
+#### 병렬 호출 규칙
+- contract-implementer + test-engineer 병렬 호출 시 **`isolation=worktree` 강제** — git index 충돌 방지.
+- test-verifier 의 분류 리포트만 보고 메인 세션이 재호출 여부 결정. test-verifier 가 다음 에이전트를 자동 호출하지 않는다.
+
+#### 브리핑 / 위임 시 규칙 (구 §6.3 에서 이동)
+- **한 번에 한 Phase만 위임한다.** 여러 단계를 통째로 맡기면 중간 의사결정이 묻힌다.
+- **인터페이스 합의가 끝난 후의 구현/테스트 작성은 병렬 가능** — contract-implementer + test-engineer 가 정형 사례. 의존성이 없는 작업은 같은 메시지에서 동시에 띄우되 `isolation=worktree` 필수.
+- 각 위임에 반드시 포함할 것:
+  1. 이 문서의 어느 절(§) / 어느 Phase 를 따르는지
+  2. 변경해도 되는 파일 / 건드리지 말아야 할 파일
+  3. "Done" 판정 기준 (어떤 테스트·어떤 행동 명세를 통과해야 하는가)
+  4. 응답 길이 제한 (긴 설명 대신 변경 요약)
+- **이해는 위임하지 않는다.** "알아서 잘 해줘"가 아니라 "이 인터페이스, 이 시그니처, 이 테스트를 통과시켜줘" 로 좁힌다.
+- **검증은 메인 세션에서.** 서브에이전트의 "완료했습니다" 는 의도일 뿐 — diff·test-verifier 리포트로 메인이 직접 확인.
 
 빌트인 에이전트는 보조 용도로:
 - 코드 탐색·"어디 정의돼 있나?" 류 → `Explore`
@@ -712,7 +738,7 @@ Phase 0~3 (구버전 — 공유 DEK 모델) 는 모두 머지된 상태. 사용�
 
 ### 6.5 메타 에이전트 (코드 흐름 외)
 
-§6.4 의 4개는 모두 코드 작업용. 별도로 **지시 문서(`*.md`) 자체의 정합성을 점검하는 메타 에이전트** 1개를 더 두었다.
+§6.4 의 6개는 모두 코드 작업용. 별도로 **지시 문서(`*.md`) 자체의 정합성을 점검하는 메타 에이전트** 1개를 더 두었다.
 
 | 에이전트 | 모델 | 권한 | 어디에 쓰나 |
 |---|---|---|---|
@@ -722,10 +748,7 @@ Phase 0~3 (구버전 — 공유 DEK 모델) 는 모두 머지된 상태. 사용�
 
 ---
 
-## 7. 다음 액션 (제안)
+## 7. 다음 액션
 
-> 진행 상태의 디테일(어디까지 했는지)은 `docs/HANDOFF.md` 가 단일 출처. 본 절은 PLAN 차원의 큰 단계 흐름만.
-
-1. ~~Phase R-1 / R-2 / R-3~~ — 완료. 세부는 HANDOFF.md.
-2. **Phase R-4 (본인 자율 passphrase 변경)** — `spring-backend` 위임 → `code-reviewer` 통합 리뷰. §6.2 R-4 행 그대로.
-3. (이후) Phase 4 본래 계획대로 — README 갱신 + 수동 검수 체크리스트 정리.
+현재 상태와 다음 액션은 `docs/HANDOFF.md` 단일 출처.
+PLAN 은 설계 원칙·정책만 다루고, 진척·다음 일은 HANDOFF 에서 확인한다.
