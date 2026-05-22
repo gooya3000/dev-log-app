@@ -17,6 +17,7 @@
 | **사용자 셀프 가입** | `/register` 에서 userId + passphrase 입력 → `DEK_user` 랜덤 발급 → `userWrappedDek` (K_user) + `adminWrappedDek` (K_admin) 두 사본 저장 → `users[]` 엔트리 추가 (§4.5.6) |
 | 사용자 로그인 | `/unlock` 에서 사용자 passphrase 입력 → `H_user` 검증 → `userWrappedDek` unwrap 으로 `DEK_user` 획득 → ROLE_USER 세션 (§5.6) |
 | 사용자 passphrase 재설정 | 관리자 모드에서 `/vault/users/{id}/reset-passphrase` → `adminWrappedDek` 로 `DEK_user` 회수 → 새 passphrase 로 `userWrappedDek` 만 재발급. `DEK_user` 그대로 (§4.5.6) |
+| **사용자 본인 passphrase 변경** | 로그인 상태에서 `/logs/profile/passphrase` → 옛 passphrase 검증 → 새 passphrase 로 `userWrappedDek` 만 재발급. `DEK_user`·`adminWrappedDek` 그대로. 세션 유지 (§4.5.6) |
 | 사용자 삭제 | 관리자 모드에서 `users[]` 엔트리 + `data/logs/{userId}/` 디렉토리 일괄 제거 |
 | 회고 작성 | 폼에서 날짜·제목·본문 항목들을 입력 → 평문 JSON 직렬화 → AES-256-GCM 암호화 → 파일 1개로 저장 |
 | 회고 목록 | 날짜 내림차순, 제목·태그·요약 노출. 로그인 세션의 `DEK_user` 로 본인 디렉토리(`data/logs/{userId}/`) 파일만 복호화 후 in-memory 정렬·필터 |
@@ -40,7 +41,6 @@
 
 ### 1.3 NON-GOAL (MVP에서 의도적으로 제외)
 
-- 사용자 본인의 자율 passphrase 변경 (옛 passphrase 알고 새 passphrase 로 회전) — 잊으면 admin reset 으로 대체
 - 가입 차단/초대 코드 (오픈 가입). 학습용 로컬 가정.
 - 이메일 인증/비밀번호 복구 메일
 - 검색 인덱스, 풀텍스트 검색 (목록 페이지의 단순 필터까지만)
@@ -70,6 +70,8 @@ Spring Security `SecurityFilterChain` 으로 URL 별 권한이 결정된다. 권
 | `POST /logs/{id}` | POST | ROLE_USER | 수정 저장 |
 | `POST /logs/{id}/delete` | POST | ROLE_USER | 삭제 |
 | `POST /logs/{id}/blog-draft` | POST | ROLE_USER | 폼에 `apiKey` 포함, LLM 호출 후 결과 표시. 키는 1회 사용 후 폐기 |
+| `GET /logs/profile/passphrase` | GET | ROLE_USER | 본인 passphrase 변경 폼 (옛 passphrase + 새 passphrase + 확인) |
+| `POST /logs/profile/passphrase` | POST | ROLE_USER | 옛 passphrase 검증 → `userWrappedDek` 만 새 K_user 로 rewrap. 세션 유지 → `/logs?passphrase-changed` |
 | `GET /vault/login` | GET | permitAll | 관리자 passphrase 입력 폼 |
 | `POST /vault/login` | POST | permitAll | properties 의 admin passphrase 와 constant-time 비교 → ROLE_ADMIN 세션 → `/vault/users` |
 | `POST /vault/logout` | POST | ROLE_ADMIN | 관리자 세션 종료 → `/vault/login` |
@@ -152,6 +154,7 @@ com.example.devlogapp
 │   ├── UserRegistrationService  // 셀프 가입 — DEK_user 생성 + userWrappedDek + adminWrappedDek 두 사본 저장
 │   ├── UserAdminService         // 사용자 reset/delete (ROLE_ADMIN 전용). 생성 책임은 UserRegistrationService 로 이관
 │   ├── UserAuthService          // 사용자 로그인 (passphrase 검증 + userWrappedDek unwrap)
+│   ├── UserAccountService       // 본인 passphrase 변경 (옛 검증 + userWrappedDek 만 rewrap, DEK_user/adminWrappedDek 무변경)
 │   └── BlogDraftService         // LLM 호출 오케스트레이션
 │
 ├── ai
@@ -165,6 +168,7 @@ com.example.devlogapp
 │   ├── BlogDraftController      // /logs/{id}/blog-draft
 │   ├── AuthController           // /unlock, /logout (사용자 로그인)
 │   ├── RegisterController       // /register (셀프 가입)
+│   ├── ProfileController        // /logs/profile/** (본인 passphrase 변경)
 │   ├── AdminAuthController      // /vault/login, /vault/logout (관리자 로그인)
 │   ├── AdminUserController      // /vault/users/** (목록·reset·delete 만)
 │   └── form
@@ -172,7 +176,7 @@ com.example.devlogapp
 │       ├── UserUnlockForm       // passphrase 1개 (@ToString.Exclude)
 │       ├── AdminLoginForm       // admin passphrase 1개 (@ToString.Exclude)
 │       ├── UserRegisterForm     // userId + passphrase + passphraseConfirm (@ToString.Exclude)
-│       ├── ResetPassphraseForm  // 새 임시 passphrase (@ToString.Exclude)
+│       ├── PassphraseChangeForm // 옛 + 새 + 확인 passphrase (@ToString.Exclude)
 │       └── BlogDraftForm        // apiKey 포함 (@ToString.Exclude)
 │
 └── util
@@ -448,6 +452,31 @@ admin passphrase                              user passphrase
 ```
 > **핵심**: 옛 K_user 를 사용하지 않는다 (옛 passphrase 를 모르니까). admin 마스터키가 우회로 역할.
 
+**사용자 본인 passphrase 변경** (`POST /logs/profile/passphrase`, ROLE_USER 필요):
+```
+  1. ROLE_USER 검증 (Spring Security) + 세션의 userId 확보
+  2. 폼: oldPassphrase + newPassphrase + newPassphraseConfirm
+       - newPassphrase != newPassphraseConfirm → 검증 에러 (재렌더)
+       - newPassphrase 강도: §5.5 기준 동일 (UserRegisterForm 과 같은 규칙 재사용)
+  3. users[] 에서 세션 userId 엔트리 조회 (없으면 세션 무효 — /unlock 강제)
+  4. oldDerivation = PBKDF2(oldPassphrase, 엔트리 salt, 600_000, 64)
+     constant-time compare(oldDerivation[32..64], 저장된 passphraseHash)
+       불일치 → 지연(~500ms) + 일반 에러 (재렌더, 새 passphrase 는 절대 적용되지 않음)
+  5. K_user_old = oldDerivation[0..32] → userWrappedDek unwrap → DEK_user 회수
+       (회수한 DEK_user 가 세션 Vault 의 DEK_user 와 같은지 sanity check — 다르면 일반 에러로 중단)
+  6. newUserSalt = SecureRandom.nextBytes(16)
+  7. newDerivation = PBKDF2(newPassphrase, newUserSalt, 600_000, 64)
+       K_user_new = newDerivation[0..32], H_user_new = newDerivation[32..64]
+  8. newUserWrappedDek = AES-GCM(DEK_user, K_user_new, newNonce)
+  9. users[id] 엔트리에서 salt, passphraseHash, userWrappedDek 만 교체
+       (adminWrappedDek 는 손 안 댐 — DEK_user 그대로니 admin 사본도 유효)
+  10. .vault-meta.json 저장 (atomic write)
+       → 저장 실패 시 메모리 변경 롤백 + 일반 에러
+  11. 세션 유지 (Vault 의 DEK_user 도 그대로). /logs?passphrase-changed 로 안내 메시지 1회 노출
+  12. oldDerivation, newDerivation, K_user_old/new, H_user_new, 두 passphrase 모두 폐기
+```
+> **핵심**: 옛 passphrase 로 검증 → 같은 DEK_user 를 새 K_user 로 다시 wrap. DEK_user 와 adminWrappedDek 모두 무변경. 회고 파일 재암호화 X. **세션을 끊지 않는다** — 본인이 방금 입력한 새 passphrase 로 즉시 다시 로그인시키는 UX 마찰을 피하고, DEK_user 가 그대로라 Vault 빈 적재 내용도 일관.
+
 **사용자 삭제** (`POST /vault/users/{id}/delete`, ROLE_ADMIN 필요):
 ```
   1. ROLE_ADMIN 검증
@@ -539,10 +568,10 @@ admin passphrase                              user passphrase
 
 사용자 로그인 passphrase 는 §5.1~5.3 stateless 원칙을 그대로 따른다.
 
-- 폼으로만 받음 (`POST /unlock`, `POST /register` 셀프 가입 시, `POST /vault/users/{id}/reset-passphrase` 재설정 시).
+- 폼으로만 받음 (`POST /unlock`, `POST /register` 셀프 가입 시, `POST /vault/users/{id}/reset-passphrase` 재설정 시 — 단 admin reset 의 새 passphrase 는 사용자 입력이 아니라 서버 발급 `SecureRandom` 16자, §4.5.6 step 5 / `POST /logs/profile/passphrase` 본인 변경 시).
 - 컨트롤러 → 서비스 → `PassphraseKdf` 까지 메서드 인자(`String passphrase`)로만 흐름.
 - PBKDF2 출력 64바이트는 `K_user` (전반 32, wrap용) + `H_user` (후반 32, 인증용) 로 분리해서 **둘 다 사용 후 즉시 폐기**. 메모리에 남는 것은 DEK 만.
-- `UserUnlockForm` / `UserRegisterForm` / `ResetPassphraseForm` 의 `passphrase` 필드는 `@ToString.Exclude` 필수.
+- `UserUnlockForm` / `UserRegisterForm` / `PassphraseChangeForm` 의 passphrase 필드는 `@ToString.Exclude` 필수.
 - 로그·예외 메시지에 passphrase · K_user · H_user · DEK 노출 금지.
 - 잘못된 passphrase 응답은 일정 시간 (~500ms) 인위적 지연 + 일반화 메시지("로그인 실패")로 타이밍/존재 여부 누출 완화.
 - **세션 만료 없음** (결정사항): unlock 후 앱 종료까지 DEK 메모리 유지. 사용자가 명시적 `POST /logout` 시 즉시 해제.
@@ -628,6 +657,13 @@ Phase 0~3 (구버전 — 공유 DEK 모델) 는 모두 머지된 상태. 사용�
 [Phase R-3] 통합 점검                                     (code-reviewer + 메인)
    - code-reviewer 리포트
    - 메인 세션: bootRun → 가입 → 로그인 → 회고 작성 → admin reset E2E
+        │
+        ▼
+[Phase R-4] 본인 자율 passphrase 변경                     (spring-backend → code-reviewer)
+   - PLAN §1.3 NON-GOAL 결정 뒤집기 (E2E 검수 중 발견된 UX 위화감)
+   - ProfileController + PassphraseChangeForm + UserAccountService
+   - /logs/profile/passphrase GET/POST. 세션 유지.
+   - 옛 검증 → userWrappedDek 만 rewrap. DEK_user / adminWrappedDek 무변경
 ```
 
 ### 6.2 단계별 서브에이전트 위임 표
@@ -643,6 +679,7 @@ Phase 0~3 (구버전 — 공유 DEK 모델) 는 모두 머지된 상태. 사용�
 | **R-1** | `spring-backend` | 본 문서 §1.1, §3, §4 **전체(§4.5 사용자별 DEK + admin wrap)**, §5.6/§5.7. **건드릴 파일 명시**: `domain/User`, `vault/VaultMeta`, `storage/VaultMetaRepository`, `storage/JsonDevLogRepository`, `service/VaultBootstrapService`, 새로 만들 `service/UserRegistrationService`, `service/UserAdminService` (createUser 제거), `service/UserAuthService`, `vault/Vault`, `security/UserAuthenticationProvider`. **건드리지 말 파일**: `ai/**`, `web/BlogDraftController`, Phase 3 산출물 | 테스트: ① bootstrap → adminSalt 만 발급, DEK 안 만듦 ② 셀프 가입 → users[] 엔트리에 userWrappedDek + adminWrappedDek 두 사본 동시 저장, 같은 DEK_user 디코드 ③ user login round-trip(H_user 비교 → userWrappedDek unwrap → DEK_user) ④ admin reset → 옛 passphrase 불가, 새 passphrase 가능, **DEK_user·adminWrappedDek 동일**, 회고 파일 재암호화 X ⑤ 사용자 삭제 → users[] 엔트리 + data/logs/{userId}/ 디렉토리 둘 다 사라짐 ⑥ 두 사용자 회고 격리 — userA 의 Vault 로 userB 파일 복호화 시 GCM 실패 ⑦ adminWrappedDek 변조 시 reset 실패 ⑧ admin passphrase 누락/default 시 fail-fast 유지 ⑨ admin passphrase 로그 노출 없음 |
 | **R-2** | `spring-backend` | 본 문서 §2 (URL 표 + 템플릿 목록), §3 web 패키지, §5.6/§5.7. **신규 파일**: `web/RegisterController`, `web/form/UserRegisterForm`, `templates/register.html`. **수정 파일**: `web/AdminUserController` (생성 액션 제거), `templates/vault/users/list.html`, `templates/unlock.html` (?registered 안내), `security/SecurityConfig` (/register permitAll). **제거 파일**: `web/form/UserCreateForm`, `templates/vault/users/form.html`, `templates/vault/users/created.html` | MockMvc 슬라이스 테스트: ① `GET /register` 200 ② `POST /register` 유효한 폼 → 302 → `/unlock?registered` + users[] 에 새 엔트리 ③ `POST /register` userId 중복 → 4xx + 일반화 메시지 ④ `POST /register` passphrase != confirm → 4xx ⑤ ROLE_USER 가 `/vault/users` 진입 시 차단 ⑥ /vault/users/new 경로는 더 이상 매핑되지 않음 (404) |
 | **R-3** | `code-reviewer` + 메인 | R-1, R-2 diff 전체 + §4.5 정책 + §5 시크릿 정책 | code-reviewer 리포트 PASS. 메인 세션이 `./gradlew bootRun` 으로 ① 가입 ② 로그인 ③ 회고 작성 ④ 로그아웃 ⑤ admin reset ⑥ 새 임시 passphrase 로 재로그인 — 회고 그대로 보임 ⑦ admin 사용자 삭제 → 디렉토리 사라짐 까지 통과 |
+| **R-4** | `spring-backend` → `code-reviewer` | 본 문서 §1.1 (본인 변경 행), §2 (`/logs/profile/passphrase` GET/POST), §4.5.6 본인 변경 흐름 11단계, §5.6 (PassphraseChangeForm @ToString.Exclude). **신규 파일**: `web/ProfileController`, `web/form/PassphraseChangeForm`, `service/UserAccountService`, `templates/logs/profile/passphrase.html`. **수정 파일**: `security/SecurityConfig` (`/logs/profile/**` 명시적으로 ROLE_USER — 이미 `/logs/**` 산하라 권한은 OK, 다만 CSRF/redirect 동작 확인), `templates/logs/list.html` (상단 헤더에 "비밀번호 변경" 링크 추가 + `?passphrase-changed` 안내 배너), `storage/VaultMetaRepository` 필요시 atomic 갱신 보강. **건드리지 말 파일**: `vault/**` 내부 (Vault·VaultCipher·KeyWrapper·PassphraseKdf 의 시그니처는 그대로), `ai/**`, `web/BlogDraftController`, admin 관련 모든 파일 | 테스트: ① `GET /logs/profile/passphrase` 200 (ROLE_USER) ② `POST` 옛/새/확인 일치 → 302 `/logs?passphrase-changed`, users[] 엔트리의 salt·passphraseHash·userWrappedDek 만 교체, adminWrappedDek 동일 ③ 변경 후 같은 세션으로 `/logs` 200 (세션 유지·DEK_user 동일) ④ 변경 후 새 passphrase 로 `/unlock` 가능, 옛 passphrase 로 `/unlock` 실패 ⑤ admin 의 adminWrappedDek 우회로로 DEK_user 회수 시 본인 변경 전과 동일한 32바이트 ⑥ 옛 passphrase 불일치 → 200 재렌더 + 일반화 에러, users[] 무변경 ⑦ new != confirm → 200 재렌더 + 검증 에러, users[] 무변경 ⑧ ROLE_ADMIN(=/vault 세션) 단독으로 진입 시 차단 (ROLE_USER 아님) ⑨ 미인증 진입 시 `/unlock` 리다이렉트 ⑩ 로그·예외에 passphrase·DEK·K_user 노출 없음 |
 
 ### 6.3 서브에이전트에 브리핑할 때 지킬 규칙
 
@@ -689,7 +726,6 @@ Phase 0~3 (구버전 — 공유 DEK 모델) 는 모두 머지된 상태. 사용�
 
 > 진행 상태의 디테일(어디까지 했는지)은 `docs/HANDOFF.md` 가 단일 출처. 본 절은 PLAN 차원의 큰 단계 흐름만.
 
-1. **Phase R-1 (vault 모델 재구축)** — `spring-backend` 위임. §6.2 R-1 행 그대로. 가장 큰 변경이라 단계 마무리에 `code-reviewer` 한 번.
-2. **Phase R-2 (웹 화면 재구축)** — `spring-backend` 위임. R-1 완료 후. `/register` 추가 + `/vault/users/new` 제거 + 템플릿 정리.
-3. **Phase R-3 (통합 점검)** — `code-reviewer` 리포트 + 메인 세션 `bootRun` 브라우저 E2E 점검. 가입 → 로그인 → 회고 → admin reset → 재로그인 까지.
-4. (이후) Phase 4 본래 계획대로 — README 갱신 + 수동 검수 체크리스트 정리.
+1. ~~Phase R-1 / R-2 / R-3~~ — 완료. 세부는 HANDOFF.md.
+2. **Phase R-4 (본인 자율 passphrase 변경)** — `spring-backend` 위임 → `code-reviewer` 통합 리뷰. §6.2 R-4 행 그대로.
+3. (이후) Phase 4 본래 계획대로 — README 갱신 + 수동 검수 체크리스트 정리.
