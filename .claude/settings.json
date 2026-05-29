@@ -20,6 +20,7 @@
       "Bash(git grep*)"
     ],
     "deny": [
+      "Read(README.md)",
       "Read(application-local.properties)",
       "Read(**/application-local.properties)",
       "Read(.env)",
