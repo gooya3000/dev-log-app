@@ -1,48 +1,53 @@
 <!DOCTYPE html>
-<html xmlns:th="http://www.thymeleaf.org">
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>DevLog — 회고 목록</title>
-    <style th:replace="~{layout :: commonStyles}"></style>
+    <th:block th:replace="~{layout :: commonStyles}"></th:block>
 </head>
 <body>
 <nav th:replace="~{layout :: nav}"></nav>
 
-<h1>회고 목록</h1>
+<div class="container pb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <h1 class="h3 mb-0">회고 목록</h1>
+        <div class="d-flex gap-2">
+            <a th:href="@{/logs/profile/passphrase}" class="btn btn-outline-secondary btn-sm">비밀번호 변경</a>
+            <a th:href="@{/logs/new}" class="btn btn-primary btn-sm">새 회고 작성</a>
+        </div>
+    </div>
 
-<!-- passphrase-changed 쿼리 파라미터가 있을 때 안내 배너 1회 노출 -->
-<div th:if="${param['passphrase-changed'] != null}" class="info"
-     style="margin-bottom:1rem; padding:0.5rem; border:1px solid #060; background:#f0fff0;">
-    비밀번호가 변경되었습니다.
+    <div th:if="${param['passphrase-changed'] != null}" class="alert alert-success">
+        비밀번호가 변경되었습니다.
+    </div>
+
+    <div th:if="${#lists.isEmpty(logs)}" class="text-muted">
+        아직 회고가 없습니다.
+    </div>
+
+    <table th:if="${!#lists.isEmpty(logs)}" class="table table-hover">
+        <thead>
+        <tr>
+            <th>날짜</th>
+            <th>제목</th>
+            <th class="d-none d-md-table-cell">태그</th>
+            <th class="d-none d-md-table-cell">기분</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="log : ${logs}">
+            <td class="text-nowrap" th:text="${log.date}"></td>
+            <td>
+                <a th:href="@{/logs/{id}(id=${log.id})}" th:text="${log.title}"></a>
+            </td>
+            <td class="d-none d-md-table-cell text-muted small" th:text="${#strings.listJoin(log.tags, ', ')}"></td>
+            <td class="d-none d-md-table-cell" th:text="${log.mood}"></td>
+        </tr>
+        </tbody>
+    </table>
 </div>
 
-<a th:href="@{/logs/new}"><button>새 회고 작성</button></a>
-<a th:href="@{/logs/profile/passphrase}" style="margin-left:0.5rem;"><button>비밀번호 변경</button></a>
-
-<div th:if="${#lists.isEmpty(logs)}" style="margin-top:1rem; color:#666;">
-    아직 회고가 없습니다.
-</div>
-
-<table th:if="${!#lists.isEmpty(logs)}" style="width:100%; border-collapse:collapse; margin-top:1rem;">
-    <thead>
-    <tr style="border-bottom:2px solid #333;">
-        <th style="text-align:left; padding:0.4rem;">날짜</th>
-        <th style="text-align:left; padding:0.4rem;">제목</th>
-        <th style="text-align:left; padding:0.4rem;">태그</th>
-        <th style="text-align:left; padding:0.4rem;">기분</th>
-    </tr>
-    </thead>
-    <tbody>
-    <tr th:each="log : ${logs}" style="border-bottom:1px solid #eee;">
-        <td style="padding:0.4rem;" th:text="${log.date}"></td>
-        <td style="padding:0.4rem;">
-            <a th:href="@{/logs/{id}(id=${log.id})}" th:text="${log.title}"></a>
-        </td>
-        <td style="padding:0.4rem;" th:text="${#strings.listJoin(log.tags, ', ')}"></td>
-        <td style="padding:0.4rem;" th:text="${log.mood}"></td>
-    </tr>
-    </tbody>
-</table>
+<th:block th:replace="~{layout :: scripts}"></th:block>
 </body>
 </html>

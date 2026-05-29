@@ -2,7 +2,6 @@ package com.example.devlogapp.web.form;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
-import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -23,7 +22,6 @@ public class UserRegisterForm {
     private String userId;
 
     @NotBlank(message = "Passphrase를 입력하세요.")
-    @Size(min = 8, message = "Passphrase는 8자 이상이어야 합니다.")
     @ToString.Exclude
     private String passphrase;
 

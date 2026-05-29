@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevLog</title>
+    <th:block th:replace="~{layout :: commonStyles}"></th:block>
+</head>
+<body class="bg-light">
+
+<div class="d-flex justify-content-center align-items-center" style="min-height: 100vh;">
+    <div class="text-center px-4">
+        <div class="mb-3" style="font-size: 3rem;">📓</div>
+        <h1 class="fw-bold mb-2">DevLog</h1>
+        <p class="text-muted mb-4">개발 회고 &amp; 블로그 초안</p>
+        <div class="d-flex gap-2 justify-content-center flex-wrap">
+            <a th:href="@{/unlock}" class="btn btn-outline-primary btn-lg px-4">로그인</a>
+            <a th:href="@{/register}" class="btn btn-primary btn-lg px-4">회원가입</a>
+        </div>
+    </div>
+</div>
+
+<th:block th:replace="~{layout :: scripts}"></th:block>
+</body>
+</html>

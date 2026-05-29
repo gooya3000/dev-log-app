@@ -5,18 +5,48 @@
   "adminSalt" : "ZGW8Fjo+U3kBRKDOPsVSiA==",
   "users" : [ {
     "id" : "test",
-    "salt" : "Q8X8gY5JiGppCkau5uerYQ==",
-    "passphraseHash" : "t+0u0vinQOEqjnCBeHcMu5+3Nq1z4XeNqbHOWS6NrX4=",
+    "salt" : "ShsVZz1B1U+Dp3PfkHzlUw==",
+    "passphraseHash" : "kZGfchuStUWlxl0wm99NFSOyzZvOhFuhbzPhSswrYt8=",
     "createdAt" : "2026-05-22T06:18:37.29304Z",
     "userWrappedDek" : {
       "alg" : "AES-256-GCM",
-      "nonce" : "x4IHGorIk6VBuwiW",
-      "ct" : "O0gTuFM7ThWZhDsOGMFSLNqWf5qXKI5stmZONQ3BLUGC+LmOAnWUtZ3axhHUasNQ"
+      "nonce" : "vWWYuqhxHQErd0QH",
+      "ct" : "thwozx7GczE7l4jxCVQDP413hfzqPHd+SWB0463MAqy1ByoKi9bK0J8C5JK6c+vu"
     },
     "adminWrappedDek" : {
       "alg" : "AES-256-GCM",
       "nonce" : "eNu18aqkFhAvmxxb",
       "ct" : "0/biknVvXRoA2q+tczOQyzVxnZy7THTAxv1vZFg+7Ez7VspYB2K2sd2Ilfhtkgj+"
+    }
+  }, {
+    "id" : "test2",
+    "salt" : "ZtZ3rm93pw3UWDOhKlSp/Q==",
+    "passphraseHash" : "RJdYMRYqPoRvmcuQhaQwGkGP5zJDKIlcP7AOmZ55drU=",
+    "createdAt" : "2026-05-29T05:50:43.98191Z",
+    "userWrappedDek" : {
+      "alg" : "AES-256-GCM",
+      "nonce" : "nURixLeYispCnY+p",
+      "ct" : "MR7ad4g3B166Hb5LPPG6CsYbg49f8p9Kb6gls5SNwagmo+3R2/QDjOr1+IGvfQi6"
+    },
+    "adminWrappedDek" : {
+      "alg" : "AES-256-GCM",
+      "nonce" : "lvdf43JULxd8QeLY",
+      "ct" : "OvzDEWgeHSCNqq+4mCZFG+mvPR15sGkuC5mz0nkLLhgo1Lcm1HmbWfYi6kxaL7GG"
+    }
+  }, {
+    "id" : "test1",
+    "salt" : "sX6qI9nq1yjyYwTdGJhAuQ==",
+    "passphraseHash" : "ix+HSLEJOUmvg7mpvOfAg57sGKKmeNj6NtpLezpnhVk=",
+    "createdAt" : "2026-05-29T14:53:08.30468+09:00",
+    "userWrappedDek" : {
+      "alg" : "AES-256-GCM",
+      "nonce" : "g9RaihSUvv1+4/iK",
+      "ct" : "/9YfG7vYh74yB3MguWhRIe4rauzcxVQXbJ9EJruQ+dnvM0FNdI47qwUGZ9UQZDuk"
+    },
+    "adminWrappedDek" : {
+      "alg" : "AES-256-GCM",
+      "nonce" : "d8dPHqrQVdAqhCCv",
+      "ct" : "AAenmvpfl6S1iFzOow0MOIb2M7o7EF5apnry0JUzTgtERnV+cEm0nJwlqLHSgRya"
     }
   } ]
 }

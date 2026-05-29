@@ -1,7 +1,7 @@
 # DevLog — 핸드오프 노트
 
 PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위한 진행 노트**.
-마지막 갱신: 2026-05-22 (R-4 종료).
+마지막 갱신: 2026-05-29 (UI 개선 완료).
 
 ---
 
@@ -24,10 +24,20 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 | **R-3 (E2E)** | 본인 `bootRun` 수동 검수 — 가입~admin reset 까지 동작 확인. `data/` 산출물 보존 (R-4 입력) | (이번 커밋) | ✅ |
 | **R-4 (PLAN)** | §1.3 NON-GOAL 결정 뒤집기 + §1.1/§2/§4.5.6/§5.6/§6 본인 변경 흐름 신설 | `b0423bb` | ✅ |
 | **R-4 (구현 + 리뷰)** | ProfileController + UserAccountService + PassphraseChangeForm + 템플릿 + 단위/슬라이스 13개. code-reviewer Blocker 0 / Major 0 / Minor 5 (모두 후속) | (이번 커밋) | ✅ |
+| **UI 개선** | Bootstrap 5 전체 마이그레이션 + 랜딩 페이지 + Java 21 업그레이드 | — | ✅ |
 
 ---
 
 ## 최근 결정 / 변경
+
+- **2026-05-29 — UI/UX 개선 + Java 21 업그레이드** (미커밋). `bootRun` E2E 검수 중 발견한 UI 문제 수정:
+  - `build.gradle` Java toolchain 17 → 21 (머신에 17 없음, 21만 설치돼 있어 변경).
+  - `HomeController` 신규 — `GET /` 미인증 시 랜딩 페이지(`home.html`), 로그인 상태면 `/logs` 리다이렉트. 로고 클릭 404 해결.
+  - `SecurityConfig` — `/` 를 `hasRole("USER")` 에서 `permitAll` 로 변경.
+  - `layout.html` Bootstrap 5.3.3 CDN 반응형 navbar (햄버거 메뉴 포함) 로 전면 교체.
+  - 전체 템플릿 12개 Bootstrap 클래스 적용 (form-control, btn, alert, table-hover 등).
+  - `home.html` 신규 — 심플 랜딩 페이지 (로그인·회원가입 버튼).
+  - `UserRegisterForm` `@Size(min=8)` 제거 — passphrase 최소 길이 규칙 삭제 요청.
 
 - **2026-05-22 — Phase R-4 완료** (이번 커밋). `spring-backend` 위임으로 `/logs/profile/passphrase` GET/POST 구현. PLAN §4.5.6 본인 변경 11단계(옛 검증 → DEK_user sanity check → userWrappedDek 만 rewrap → adminWrappedDek 무변경 → 세션 유지) 그대로. `./gradlew test` 109개 통과 (R-3 96 + 신규 13). code-reviewer 통합 리뷰 결과 **Blocker 0 / Major 0 / Minor 5**:
   - r1: `PassphraseChangeForm` 에 클래스 `@ToString` 없어 `@ToString.Exclude` 무력 (실효 노출 X, 형제 폼들과 패턴 불일치 / PLAN §5.6 보증 약함)
@@ -69,10 +79,11 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 
 ## 다음 액션
 
-1. **R-4 본인 검수 (bootRun E2E)** — `./gradlew bootRun` 으로 직접 띄워 ① 로그인 ② `/logs/profile/passphrase` 로 본인 변경 ③ 안내 배너 + 세션 유지 ④ 변경 후 회고 목록 정상 노출 ⑤ 로그아웃 후 새 passphrase 로 재로그인 ⑥ 옛 passphrase 로는 실패 까지 확인. 통과하면 R-4 종결.
-2. **Minor 후속 묶음** — R-3 m1~m6 + R-4 r1~r5 우선순위 골라 묶음 처리. 본인 결정.
-3. **Vault 재셋업** — Minor 정리 후 `data/` 삭제하고 새 부트스트랩 → `/register` 로 본인 사용자 가입 (강한 passphrase, PLAN §5.5) → 회고 1~2건 작성 → `data/` 커밋·푸시.
-4. **Phase 4 체크리스트 명문화** — PLAN §6.2 "수동 체크리스트" 를 실제 항목으로 채우기.
+1. **UI 개선 커밋** — 이번 세션 변경분 (Bootstrap 마이그레이션 + 랜딩 페이지 + Java 21) 커밋·푸시.
+2. **R-4 본인 검수 마무리** — `bootRun` 으로 ① passphrase 변경 ② 세션 유지 ③ 새 passphrase 재로그인 ④ 옛 passphrase 실패 확인 후 R-4 종결.
+3. **Minor 후속 묶음** — R-3 m1~m6 + R-4 r1~r5 우선순위 골라 묶음 처리. 본인 결정.
+4. **Vault 재셋업** — Minor 정리 후 `data/` 삭제 → 새 부트스트랩 → 강한 passphrase 로 가입 → 회고 1~2건 작성 → `data/` 커밋·푸시.
+5. **Phase 4 체크리스트 명문화** — PLAN §6.2 "수동 체크리스트" 를 실제 항목으로 채우기.
 
 ---
 
