@@ -33,6 +33,7 @@
             <th>제목</th>
             <th class="d-none d-md-table-cell">태그</th>
             <th class="d-none d-md-table-cell">기분</th>
+            <th class="d-none d-lg-table-cell">작성일시</th>
         </tr>
         </thead>
         <tbody>
@@ -43,6 +44,7 @@
             </td>
             <td class="d-none d-md-table-cell text-muted small" th:text="${#strings.listJoin(log.tags, ', ')}"></td>
             <td class="d-none d-md-table-cell" th:text="${log.mood}"></td>
+            <td class="d-none d-lg-table-cell text-muted small" th:text="${#temporals.format(log.createdAt, 'MM-dd HH:mm')}"></td>
         </tr>
         </tbody>
     </table>

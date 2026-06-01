@@ -20,12 +20,15 @@
         <thead>
         <tr>
             <th>사용자 ID</th>
+            <th class="d-none d-md-table-cell">가입일시</th>
             <th>작업</th>
         </tr>
         </thead>
         <tbody>
         <tr th:each="user : ${users}">
             <td th:text="${user.id}"></td>
+            <td class="d-none d-md-table-cell text-muted small"
+                th:text="${#temporals.format(user.createdAt, 'yyyy-MM-dd HH:mm')}"></td>
             <td>
                 <a th:href="@{/vault/users/{id}/reset-passphrase(id=${user.id})}"
                    class="btn btn-outline-warning btn-sm me-2">Passphrase 재설정</a>

@@ -7,6 +7,7 @@ import lombok.ToString;
  * 본인 passphrase 변경 폼.
  * PLAN.md §5.6: 모든 passphrase 필드 @ToString.Exclude.
  */
+@ToString
 public class PassphraseChangeForm {
 
     @ToString.Exclude

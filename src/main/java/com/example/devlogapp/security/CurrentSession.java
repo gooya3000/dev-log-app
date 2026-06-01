@@ -3,6 +3,7 @@ package com.example.devlogapp.security;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 /**
@@ -31,12 +32,15 @@ public class CurrentSession {
 
     /**
      * 현재 unlock 한 userId 반환.
-     * UserAuthenticationToken 의 principal 이 userId String.
+     * 프로덕션: UserAuthenticationProvider 가 String principal 세팅.
+     * 테스트(@WithMockUser): UserDetails principal → getUsername() 로 추출.
      */
     public String getUserId() {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null) return null;
         Object principal = auth.getPrincipal();
-        return principal instanceof String s ? s : null;
+        if (principal instanceof String s) return s;
+        if (principal instanceof UserDetails ud) return ud.getUsername();
+        return null;
     }
 }

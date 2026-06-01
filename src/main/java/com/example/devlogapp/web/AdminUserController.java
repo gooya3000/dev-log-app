@@ -12,6 +12,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 /**
@@ -32,12 +33,18 @@ public class AdminUserController {
         this.vaultMetaRepository = vaultMetaRepository;
     }
 
+    /** id·createdAt 만 뷰에 노출하는 DTO (passphraseHash·wrappedDek 차단). */
+    record UserSummary(String id, OffsetDateTime createdAt) {}
+
     /** GET /vault/users — 사용자 목록. */
     @GetMapping
     public String list(Model model) {
-        List<User> users = vaultMetaRepository.load()
+        List<UserSummary> users = vaultMetaRepository.load()
                 .map(VaultMeta::getUsers)
-                .orElse(List.of());
+                .orElse(List.of())
+                .stream()
+                .map(u -> new UserSummary(u.getId(), u.getCreatedAt()))
+                .toList();
         model.addAttribute("users", users);
         return "vault/users/list";
     }

@@ -15,7 +15,9 @@ import java.util.Arrays;
 import java.util.Base64;
 
 /**
- * 사용자 로그인 서비스 — H_user 검증 + userWrappedDek unwrap → Vault 적재.
+ * 사용자 passphrase 검증 + userWrappedDek unwrap → Vault 적재.
+ * 프로덕션 인증 경로는 UserAuthenticationProvider 가 담당.
+ * 본 클래스는 테스트에서 Vault 를 직접 초기화할 때 사용한다.
  * PLAN.md §4.5.6 사용자 로그인 흐름 참조.
  */
 @Service
@@ -63,7 +65,6 @@ public class UserAuthService {
 
         byte[] dek = null;
         try {
-            // userWrappedDek 로 DEK unwrap
             User.WrappedDek uwd = user.getUserWrappedDek();
             dek = KeyWrapper.unwrap(kUser, uwd.getNonce(), uwd.getCt());
             vault.unlock(dek, userId);

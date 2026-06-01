@@ -57,6 +57,10 @@ public class ProfileController {
         }
 
         String userId = currentSession.getUserId();
+        // r2: 세션 무효(userId null) → /unlock 강제 (PLAN §4.5.6 단계 3)
+        if (userId == null) {
+            return "redirect:/unlock";
+        }
 
         try {
             userAccountService.changeOwnPassphrase(
@@ -66,6 +70,11 @@ public class ProfileController {
         } catch (PassphraseMismatchException e) {
             bindingResult.reject("passphrase.mismatch",
                     "현재 비밀번호가 일치하지 않습니다.");
+            return "logs/profile/passphrase";
+        } catch (IllegalStateException e) {
+            // r3: save 실패 또는 세션·vault 불일치 → 일반 에러 (PLAN §4.5.6 단계 10)
+            bindingResult.reject("passphrase.error",
+                    "비밀번호 변경 중 오류가 발생했습니다. 다시 시도해 주세요.");
             return "logs/profile/passphrase";
         }
 

@@ -10,7 +10,7 @@
 
 # 관리자 passphrase. /vault/** 영역(관리자 도구) 진입에 사용.
 # 평문 하드코딩이며, 절대 GitHub 에 올라가지 않도록 주의.
-# 분실 시 application-local.properties 를 새 값으로 갱신만 하면 됨 — 단,
-# 새 값으로 .vault-meta.json 의 adminWrappedDek 도 재발급해야 unwrap 가능.
-# (자세한 흐름은 PLAN.md §4.5.6)
+# ⚠️  이 값을 변경하면 기존 adminWrappedDek 를 풀 수 없어 사용자 passphrase reset 기능이 영구 상실됨.
+#    변경이 필요할 경우 data/ 를 포함한 vault 전체를 초기화하는 것이 올바른 절차.
+# (자세한 흐름은 PLAN.md §4.5.7)
 devlog.admin.passphrase=CHANGE-ME-TO-A-STRONG-ADMIN-PASSPHRASE
