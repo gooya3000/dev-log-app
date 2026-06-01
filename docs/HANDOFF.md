@@ -30,6 +30,20 @@ PLAN.md 가 1차 출처. 이 문서는 **현재 위치를 빠르게 잡기 위�
 
 ## 최근 결정 / 변경
 
+- **2026-06-01 — Minor 후속 묶음 완료** (`b158a28`). R-3 m1~m6 + R-4 r1~r5 처리. `./gradlew test` 110개 통과 (109 → 110, 신규 1개).
+  - r1: `PassphraseChangeForm` 클래스 레벨 `@ToString` 추가 → `@ToString.Exclude` 실효화
+  - r2: `ProfileController` `userId == null` 가드 → `/unlock` 리다이렉트 (PLAN §4.5.6 단계 3)
+  - r3: `ProfileController` `IllegalStateException` catch → 폼 재렌더 (save 실패 500 차단, PLAN §4.5.6 단계 10)
+  - r4: `ProfileControllerTest` `ArgumentCaptor` 로 userId null 흐름 검증 + `post_nullUserId` 케이스 신규 추가
+  - r5: 정상 흐름 영향 없음 — 단계 3 null 가드가 커버하므로 별도 수정 생략
+  - m2: `unlock.html` 불필요한 `value=""` 제거
+  - m3: `logs/list.html` 작성일시(createdAt) 컬럼 추가 (lg 이상)
+  - m4: `AdminUserController.list` `User` 도메인 → `UserSummary` 레코드(id, createdAt)로 변환 — passphraseHash·wrappedDek 뷰 노출 차단
+  - m5: `UserAuthService` 삭제 시도 → 다른 테스트 3곳 의존 확인 → 복원 후 테스트 헬퍼 역할 주석 명확화. 프로덕션 경로는 `UserAuthenticationProvider` 직접 담당
+  - m6: `application-local.properties.example` admin passphrase 변경 주의사항 수정 (변경 시 adminWrappedDek 전체 무효화 경고)
+  - 부수: `CurrentSession.getUserId()` `UserDetails` principal 폴백 추가 (`@WithMockUser` 호환)
+  - 부수: `vault/users/list.html` 가입일시 컬럼 추가
+
 - **2026-05-29 — UI/UX 개선 + Java 21 업그레이드** (미커밋). `bootRun` E2E 검수 중 발견한 UI 문제 수정:
   - `build.gradle` Java toolchain 17 → 21 (머신에 17 없음, 21만 설치돼 있어 변경).
   - `HomeController` 신규 — `GET /` 미인증 시 랜딩 페이지(`home.html`), 로그인 상태면 `/logs` 리다이렉트. 로고 클릭 404 해결.
